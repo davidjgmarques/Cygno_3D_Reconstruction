@@ -10,7 +10,7 @@
 using namespace std;
 
 
-void create_and_print_wf_graph_lines3 (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, double p1t, double p1a, double p2t, double p2a) {
+void create_and_print_wf_graph_lines2 (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, vector<pair<int,double>> peaks) {
 
     TGraph *gWaveform = new TGraph();
     string newname = filename + "";
@@ -18,21 +18,21 @@ void create_and_print_wf_graph_lines3 (string filename, vector<int> time, shared
     TLine * line1 = new TLine(start1,level1,end1,level1);
     TLine * line2 = new TLine(start2,level2,end2,level2);
 
-    TMarker *marker1 = new TMarker(p1t, p1a, 43); // Point (6, 36) with style 20
-    TMarker *marker2 = new TMarker(p2t, p2a, 43); // Point (6, 36) with style 20
+    TMarker *marker1 = new TMarker(peaks[0].first, peaks[0].second, 43); // Point (6, 36) with style 20
+    TMarker *marker2 = new TMarker(peaks[1].first, peaks[1].second, 43); // Point (6, 36) with style 20
 
     for (int k = 0; k < time.size(); k++){
 
         gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
     }
-    print_graph_lines3(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, marker1, marker2);
+    print_graph_lines2(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, marker1, marker2);
     
     // I need to save the canvas to also print the lines
     // gWaveform->SetName(newname.c_str());
     // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
 }
 
-void print_graph_lines3 (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2){
+void print_graph_lines2 (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2){
 
     TCanvas *c = new TCanvas("","", 800, 600);
     c->cd();

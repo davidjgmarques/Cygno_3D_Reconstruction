@@ -1,0 +1,35 @@
+# Ignore compiled object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Ignore executable files
+*.exe
+*.out
+*.app
+
+# Ignore log files
+*.log
+
+# Ignore build directories
+build/
+dist/
+bin/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+
+# test files
+*test*
+*.root

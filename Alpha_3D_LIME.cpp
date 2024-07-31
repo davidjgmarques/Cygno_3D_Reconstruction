@@ -5,8 +5,6 @@
 #include <experimental/filesystem>
 #include <string>
 #include <numeric>
-// #include "Analyzer.h"
-#include "Track_analyzer/Analyzer.h"
 #include "TFile.h"
 #include "TH1F.h"
 #include "TH2F.h"
@@ -31,6 +29,11 @@
 #include "TTree.h"
 #include "TBrowser.h"
 
+#include "../Track_analyzer/Analyzer.h"
+#include "./plotting_functions.h"
+#include "./waveform_analyser.h"
+
+
 using namespace std;
 namespace fs = std::experimental::filesystem;
 
@@ -39,17 +42,14 @@ void print_histogram(TH1F *histo, string title, string x_axis, string y_axis);
 void print_graph_simple(TGraph *graph, string title, string x_axis, string y_axis);
 void create_and_print_wf_graph_simple (string filename, vector<int> time, shared_ptr<vector<double>> ampl, string tag);
 void create_and_print_wf_graph_lines (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start, double end, double level);
-void create_and_print_wf_graph_lines2 (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, double p1t, double p1a, double p2t, double p2a);
 void print_graph_lines (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1);
-void print_graph_lines2 (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2);
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
  double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
  int ru, int pi, int tr);
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
-void movingAverageFilter(std::shared_ptr<std::vector<double>>& input, int windowSize);
-void create_bat_input(vector<vector<double>> slice_ints);
-void run_then_read_bat(bool verbose, vector<double>& x ,vector<double>& y );
+void create_bat_input(double run, double event, double trigger, vector<vector<double>> slice_ints);
+vector<pair<double,double>> run_then_read_bat(bool verbose);
 tuple <double,double> coord_change_pmt(double x, double y);
 
 // struct Alpha3D {
@@ -87,8 +87,8 @@ struct AlphaTrackPMT {
     int pic;
     int trg;
 
-    int dir; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
-    double prob; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
+    int dir;        // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
+    double prob;    // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
     double trv_Z;
     int quad;
 
@@ -109,7 +109,7 @@ int main(int argc, char**argv) {
 
     string filename_cam = argv[ 1 ];
 
-    string filename_pmt = argv[ 2 ]; 
+    string filename_pmt = argv[ 2 ];
 
     string outputfile = argv[ 3 ]; 
     TFile* file_root = new TFile(outputfile.c_str(),"recreate");
@@ -135,10 +135,16 @@ int main(int argc, char**argv) {
     iota(time_slow_wf.begin(), time_slow_wf.end(), 0); // Fill the vector with values starting from 0
 
     int direction; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
-    vector<double> total_integral;
-    vector<int> skew_sign;
+    double dir_score;
+    bool verbose_dir_score = false;
+
+    double wf_integral;
+    vector<double> integrals_wfs;
+
     vector<double> skew_ratio;          // ** check how to calculate skewness. Useful to then connect with Bayes fit.
     double avg_skew;
+
+    vector<pair<int,double>> wf_peaks;
 
     double delta_z;
     vector<double> travelled_Z;
@@ -147,19 +153,21 @@ int main(int argc, char**argv) {
     // Variables for ToT
     int TOT20_begin = 0, TOT20_end = 0;
     double TOT20_div;
+
+    int TOT30_begin = 0, TOT30_end = 0;
+    double TOT30_div;
     vector<double> TOT30;
     vector<double> TOT20;
 
+
     // vector<vector<double>> wfs(4);
 
-    bool pmt_PID1 = false, pmt_PID2 = false;
     bool pmt_PID_total;
-    int count_id1, count_id2;
 
     // electron drift velocity in LIME, He:CF4 60:40, 800 V/cm 
     const double drift_vel = 5.471; // cm/µs
 
-    double first_half_int = 0, second_half_int = 0;
+    
     double TOT20_half_way;
     int quadrant_pmt;
 
@@ -167,7 +175,13 @@ int main(int argc, char**argv) {
     vector<vector<double>> peak_int;
 
     vector<double> x_bat, y_bat;
+    vector<pair<double,double>> points_bat;
+    vector<pair<double,double>> points_cam;
+
     TH2F* h_fullsize = new TH2F(); 
+
+    // Number of slices to be used for the track matching (CAM <-> BAT)
+    int matching_slices = 5;
 
 
     /* ************* CAM variables ********** */
@@ -221,8 +235,8 @@ int main(int argc, char**argv) {
     // vector<UInt_t> ScNpixels;       ScNpixels.reserve(nscmax);
 
     vector<float> sc_redpixID;      sc_redpixID.reserve(150000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
-    vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
-    vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
+    vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
+    vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
     vector<float> ZPix;             ZPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iz",       ZPix.data());  
 
     /* ****************************************  Opening root recoed file -- PMT ******************************************************************  */
@@ -285,9 +299,8 @@ int main(int argc, char**argv) {
                     Track.SetWScal(wFac);
                     Track.SetNPIP(NPIP);
                     Track.ApplyThr();
-                    // Track.RemoveNoise(50);
-                    Track.RemoveNoise(75);
-                    // Track.RemoveNoise(100);
+                    // Track.RemoveNoise(75);
+                    Track.RemoveNoise(100);
                     Track.ImpactPoint(Form("Track_event%i_run%i", cam_run, cam_event));
                     Track.ScaledTrack(Form("Track_event%i_run%i", cam_run, cam_event));
                     Track.Direction();
@@ -296,6 +309,24 @@ int main(int argc, char**argv) {
 
                     h_fullsize = Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_event%i_run%i", cam_run, cam_event));
 
+
+                    TCanvas* cmatch2 = new TCanvas("cmatch2", "cmatch2", 700, 700);
+                    cmatch2->cd();
+                    h_fullsize->Draw("COLZ");
+
+
+                    points_cam = Track.GetLinePoints(matching_slices,"edges");
+
+                    for (const auto& point : points_cam) {
+
+                        TMarker* marker15 = new TMarker(point.first, point.second, 34);  // Cross marker
+                        marker15->SetMarkerColor(kBlack);
+                        marker15->SetMarkerSize(2);
+                        marker15->Draw("same");
+                    }
+                    cmatch2->DrawClone();
+                    cmatch2->Write("CAM Match",TObject::kWriteDelete);
+                    delete cmatch2;
 
                     //----------- Get important track parameters  -----------//
 
@@ -407,279 +438,157 @@ int main(int argc, char**argv) {
 
         // if ( pmt_event == debug_event && pmt_trigger == debug_trigger && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
         // if ( pmt_event == debug_event && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
-        if ( pmt_event == debug_event && pmt_trigger == 1 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
+        if ( pmt_event == debug_event && pmt_trigger == 0 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
 
-            pmt_PID1 = false, pmt_PID2 = false, pmt_PID_total = false;
-
+            
             if ( pmt_channel == 1) {
                 cout << "\n\t*PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
             }
 
-            //-----------  Put branch information into vector for further analysis  -----------//
+            //-----------  Put branch information into vector for further analysis  --------------------------------------------//
+
 
             for (int j = 0; j < maxArraySize_fast; ++j) fast_waveform->push_back(pmt_waveforms[j]);
 
-            //-----------  Moving average filter applied to smooth high frequency noisy  -----------//
+
+            //-----------  Moving average filter applied to smooth high frequency noisy  ----------------------------------------//
             // Needed to properly get start and end. No problem in exaggerating as I'm not looking for any special features.
+
 
             movingAverageFilter(fast_waveform, 20);         
 
-            //-----------  Getting max value of waveform to get ToT  -----------//
 
-            auto max_it = max_element(fast_waveform->begin(), fast_waveform->end());        // Find the maximum value in the vector
-            double max_value = *max_it;                                                     // Dereference the iterator to get the maximum value
-            int time_max_value = time_fast_wf[(distance(fast_waveform->begin(), max_it))];
+            //-----------  Calculate maximum amplitude and get its time coordinate  -----------------------------------------------//
 
-            TOT20_div = 0.20;                                                                 // Percentage of maximum used to get ToT level
+
+            auto max_it = max_element(fast_waveform->begin(), fast_waveform->end());                // Find the maximum value in the vector
+            double max_value_a = *max_it;                                                           // Dereference the iterator to get the maximum value
+            int max_value_t = time_fast_wf[(distance(fast_waveform->begin(), max_it))];
+
+
+            //-----------  Calculate TOTs 20 and 30 using the value of waveform  ------------------------------------------------//
+
+
+            TOT20_div = 0.20;                                                                   // Percentage of maximum used to get ToT level
             TOT20_begin = 0, TOT20_end = 0;
-            for (int p = 0; p < fast_waveform->size(); ++p) {
-                
-                if ( ( (*fast_waveform)[p] > (max_value * TOT20_div) ) && TOT20_begin == 0)                                                         TOT20_begin   = time_fast_wf[p];
-                if ( ( (*fast_waveform)[p] < (max_value * TOT20_div) ) && TOT20_begin !=0 && TOT20_end == 0 && ( (time_fast_wf[p] - TOT20_begin) > 10) )        TOT20_end     = time_fast_wf[p];
 
-            }
-            if (TOT20_end == 0) TOT20_end = 1024;
-            // create_and_print_wf_graph_lines(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), time_fast_wf, fast_waveform, TOT20_begin, TOT20_end, max_value * TOT20_div);
-            // cout << "**TOT20: " << (TOT20_end-TOT20_begin) << endl;
-            TOT20.push_back( (TOT20_end-TOT20_begin) );
+            TOT30_div = 0.30;                                                                   // Percentage of maximum used to get ToT level
+            TOT30_begin = 0, TOT30_end = 0;
 
-            double TOT30_div = 0.30;                                                                 // Percentage of maximum used to get ToT level
-            double TOT30_begin = 0, TOT30_end = 0;
-            for (int p = 0; p < fast_waveform->size(); ++p) {
-                
-                if ( ( (*fast_waveform)[p] > (max_value * TOT30_div) ) && TOT30_begin == 0)                     TOT30_begin   = time_fast_wf[p];
-                if ( ( (*fast_waveform)[p] < (max_value * TOT30_div) ) && TOT30_begin != 0 && TOT30_end == 0 && ( (time_fast_wf[p] - TOT30_begin) > 10) )    TOT30_end     = time_fast_wf[p];
-            }  
-            if (TOT30_end == 0) TOT30_end = 1024;
+            getTOTs( fast_waveform, TOT20_div, TOT30_div,
+                TOT20_begin, TOT20_end, TOT30_begin, TOT30_end,
+                max_value_a, time_fast_wf);
+
+            TOT20.push_back( (TOT20_end-TOT20_begin) );           
             TOT30.push_back( (TOT30_end-TOT30_begin) );
 
-            double ratio_pid = ( TOT20_end - TOT20_begin) / ( TOT30_end - TOT30_begin );
+            
+            //-----------  Getting information for BAT  -------------------------------------------------------------------------//
 
-            // create_and_print_wf_graph_lines(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), time_fast_wf, fast_waveform, TOT30_begin, TOT30_end, max_value * TOT30_div);
 
-            //-----------  Getting information for BAT  -----------//
-
-            int n_slices = 5;
-            double slice_width = (TOT20_end - TOT20_begin)/n_slices;
-            double peak_int_c;
-            double peak_val;
-
-            peak_int.push_back(vector<double>{});
-            for (int s = 0; s < n_slices; ++s) {
-
-                peak_val = 0;
-                peak_int_c = 0;
-                for (int p = TOT20_begin+slice_width*(s); p < TOT20_begin+slice_width*(s+1); ++p) {
-                
-                    peak_val += (*fast_waveform)[p];
-                    peak_int_c++;
-                }
-                peak_int[pmt_channel-1].push_back(peak_val/peak_int_c);
-            }
+            sliceWaveform_BAT(fast_waveform, peak_int, matching_slices, TOT20_begin, TOT20_end);
+            
 
             //-----------  Getting travelled Z  -----------//
             //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
             
+
             delta_z = (TOT20_end - TOT20_begin) * (4/3) * (drift_vel/1000.); // in cm,         
             travelled_Z.push_back(delta_z);
 
-            //-----------  Determination of direction (GEMs or cathode)  -----------//
 
-            TOT20_half_way = (TOT20_begin + ((TOT20_end-TOT20_begin)/2.));
-            first_half_int = 0, second_half_int = 0;
-            for (int p_i = 0; p_i < fast_waveform->size(); ++p_i) {
-
-                if ( p_i >= TOT20_begin && p_i < TOT20_half_way ) first_half_int  += (*fast_waveform)[p_i];
-                if ( p_i > TOT20_half_way && p_i <= TOT20_end   ) second_half_int += (*fast_waveform)[p_i];
-            }
-            // cout << "first integral: " << first_half_int << "\nsecond integral: " << second_half_int << endl; 
-            // cout << "ratio: " << (double)first_half_int/second_half_int << endl; 
-
-            total_integral.push_back((double)(first_half_int + second_half_int));
+            //-----------  Determination of track quadrant from the PMT   -------------------------------------------------------//
 
 
-            //----------- Calculation of skewness of the Bragg Peak  -----------//
-            double peak1_amp = 0, peak1_time = 0;
-            double peak2_amp = 0, peak2_time = 0;
+            wf_integral = accumulate(fast_waveform->begin(), fast_waveform->end(), 0);
+            integrals_wfs.push_back(wf_integral);
 
-            // if ( first_half_int > second_half_int ) {        // This doesn't always work because sometimes the max value is in the half with the *lowest* integral
-            if ( time_max_value >= TOT20_begin && time_max_value < TOT20_half_way) {     // With this, I look for the "smaller peak" on the opposite half of the max value
 
-                for (int p_s = TOT20_end - 1; p_s > TOT20_begin; --p_s) {
+            //----------- Calculation of skewness of the Bragg Peak  ------------------------------------------------------------//
 
-                    if ( (*fast_waveform)[p_s] < (*fast_waveform)[p_s+1] && (*fast_waveform)[p_s+1] > 0.4*max_value) { // this 0.4 cuts for peaks in the increasing slope
+            wf_peaks.clear();
+            getSkewness_BraggPeak(fast_waveform, time_fast_wf, TOT20_begin, TOT20_end, 
+            max_value_a, max_value_t, skew_ratio, wf_peaks);
 
-                        peak2_amp = (*fast_waveform)[p_s+1];
-                        peak2_time = time_fast_wf[p_s+1];
-                        peak1_amp = max_value;
-                        peak1_time = time_max_value;
-                        break;
-                    } 
-                }
-            
-                skew_sign.push_back(0);
-                skew_ratio.push_back( (double)( ((-1.)*peak1_amp/peak2_amp) + 1. ) );
-            }
-            // else if ( second_half_int > first_half_int ) {
-            else if ( time_max_value >= TOT20_half_way && time_max_value < TOT20_end ) {
-                
-                for (int p_s = TOT20_begin + 1; p_s < TOT20_end; ++p_s) {
 
-                    if ( (*fast_waveform)[p_s] < (*fast_waveform)[p_s-1] && (*fast_waveform)[p_s-1] > 0.4*max_value ) {
+            //----------- Make final waveform plot with all the information  ---------------------------------------------------//
 
-                        peak1_amp = (*fast_waveform)[p_s-1];
-                        peak1_time = time_fast_wf[p_s-1];
-                        peak2_amp = max_value;
-                        peak2_time = time_max_value;
-                        break;
-                    } 
-                }
-
-                skew_sign.push_back(1);
-                skew_ratio.push_back( (double)( ((+1.)*peak2_amp/peak1_amp) - 1.) );
-            }
-
-            // cout << "Peak 1: " << peak1_time << " * " << peak1_amp << endl; 
-            // cout << "Peak 2: " << peak2_time << " * " << peak2_amp << endl; 
 
             create_and_print_wf_graph_lines2(Form("WFtest_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
             time_fast_wf, fast_waveform,
-            TOT20_begin, TOT20_end, max_value * TOT20_div, 
-            TOT30_begin, TOT30_end, max_value * TOT30_div, 
-            peak1_time, peak1_amp, peak2_time, peak2_amp);
+            TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
+            TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
+            wf_peaks);
 
-            //----------- Calculation of all the final variables of interest  -----------//
 
-            if ( pmt_channel == 4 ) {   // Perform actions only when I have the 4 waveforms
-
-                bool verb_skew = false;
-                if(verb_skew) {cout << "--> Skewness: " << endl;}                     
-                if(verb_skew) {cout << "Ratios: ";}      
-                if(verb_skew) {for (auto &val : skew_ratio) cout << val << " * "; cout<<endl;}
-
-                auto max_skew_it = std::max_element(skew_ratio.begin(), skew_ratio.end(), [](double a, double b) { return abs(a) < abs(b);});
-
-                double max_skew = 1;
-                if (max_skew_it != skew_ratio.end()) {
-    
-                    max_skew = *max_skew_it; 
-                    if(verb_skew) cout << "Abs max ratio: " << abs(max_skew) << endl;
-
-                } else {
-
-                    if(verb_skew) cout << "The vector is empty. This is not an alpha." << endl;
-                    // skew_sign.clear();
-                    // TOT30.clear();
-                    // TOT20.clear();                
-                    // skew_ratio.clear();                
-                    // total_integral.clear();                
-                    // travelled_Z.clear();
-                    // continue;
-                }
-
-                if(verb_skew) {cout << "Normalized: ";}                     
-                if(verb_skew) {for (auto &val : skew_ratio) cout << (double)val/abs(max_skew) << " # "; cout<<endl;}
-
-                double avg_rat = 0;
-                for (int elem = 0; elem < skew_ratio.size(); ++elem) {
-
-                    if (elem != distance(skew_ratio.begin(), max_skew_it)) {
-
-                        avg_rat += skew_ratio[elem]/abs(max_skew);  
-                    } else if (elem == distance(skew_ratio.begin(), max_skew_it)) {
-
-                        avg_rat += (max_skew/abs(max_skew)/2.);                            // Need to give some weight to the most clear wf. In this case, the weight is 1/2
-                    }
-                }
-
-                if(verb_skew) {cout << "*Final probability: " << avg_rat*100. << " %" << endl;}
-
+            //----------- Calculation of all the final variables of interest  --------------------------------------------------//
+           
+            if ( pmt_channel == 4 ) {                   // Perform actions only when I have the 4 waveforms
+                
                 cout << "\nPMT Track information: \n" << endl; 
 
-                // DIRECTION -- To be further developed taking into account the real ratios, hopefully with the help of the bat fit.
-                
-                if      (avg_rat <= -0.5 )   direction = -1, cout << "--> Moving towards the GEMs with certainty: " <<  avg_rat*100. << " %" << endl;
-                else if (avg_rat >= +0.5 )   direction = 1 , cout << "--> Moving towards the cathode with certainty: " << avg_rat*100. << " %" << endl;
-                else if (avg_rat > -0.5 || avg_rat < +0.5 ) direction = 0 , cout << "--> Ambiguous. Certainty: " << avg_rat*100. << " %" << endl;
-                
 
-                /*  Old method 
-                cout << "--> Skewness signs: "; for (auto i: skew_sign) cout << i << " ";
+                //----------- Calculate direction in Z, and respective score  ------------------------//
 
-                avg_skew = accumulate(skew_sign.begin(), skew_sign.end(), 0.0) / skew_sign.size();
-                cout << "  -> skewness sign average is: " << avg_skew << endl; // Related to how sure I am, I guess . Probably should use the real ratios (?)                  
+                verbose_dir_score = true;
+                direction = 0, dir_score = 0;
+                getDirectionScore(skew_ratio, direction, dir_score, verbose_dir_score);
 
-                if      (avg_skew < 0.5 )   direction = -1, cout << "--> This track is moving towards the GEMs." << endl;
-                else if (avg_skew >  0.5 )  direction = 1 , cout << "--> This track is moving towards the cathode." << endl;
-                else if (avg_skew ==  0.5 ) direction = 0 , cout << "--> This track direction is ambiguous." << endl;
-                // direction = round(avg_skew);
-                */
-                
-                // TRAVELLED Z
+                if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
+                else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
+                else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
+            
+
+                //----------- Calculate travelled Z  ------------------------//
+
                 avg_travel_z = accumulate(travelled_Z.begin(), travelled_Z.end(), 0.0) / travelled_Z.size();
                 cout << "--> The average travelled Z (cm) is: " << avg_travel_z << endl;
 
-                // QUADRANT -- Could be improved by dividing the image in 16 pixels instead of 4.
-                auto max_pmt_it = max_element(total_integral.begin(), total_integral.end()); 
-                int index = distance(total_integral.begin(), max_pmt_it);
-                quadrant_pmt = index + 1;
+
+                //----------- Calculate Quadrant ---------------------------//
+                
+                getQuadrantPMT(integrals_wfs, quadrant_pmt);
                 cout << "--> The track is in the quadrant: " << quadrant_pmt << endl;
 
-                // Particle ID
 
-                count_id1 = 0;
-                count_id2 = 0;
-                for (int q = 0; q < TOT20.size(); ++q) {
-                    
-                    if ( (TOT20[q] / TOT30[q]) >= 1 && (TOT20[q] / TOT30[q]) <= 2 ) count_id1++;
-                    if ( TOT20[q] >= 80 ) count_id2++;
-                }
+                //----------- Particle ID ---------------------------------//
 
-                if ( count_id1 == 4) pmt_PID1 = true;
-                if ( count_id2 == 4) pmt_PID2 = true;
-                
-                if ( pmt_PID1 && pmt_PID2) {
-                    pmt_PID_total = true;
-                } else pmt_PID_total = false;
-
-                cout << "--> The TOT20/TOT30 ratios were: " << (double)TOT20[0]/TOT30[0] << " " << (double)TOT20[1]/TOT30[1] << " " << (double)TOT20[2]/TOT30[2] << " " << (double)TOT20[3]/TOT30[3] << " " << endl;
-                cout << "--> The TOT20 lengths were: " << TOT20[0] << " " << TOT20[1] << " " << TOT20[2] << " " << TOT20[3] << " " << endl;
+                pmt_PID_total = false;
+                getAlphaIdentification(TOT20, TOT30, pmt_PID_total, true);
                 cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
 
-                ///////// Information for BAT
-                for ( int pp = 0; pp < peak_int.size(); ++pp) {
 
-                    cout << "Average values for slice integrals for pmt number: " << pp+1 << ": ";
+                //----------- Generate BAT input file and run routine ------//
 
-                    for ( int qq = 0; qq < peak_int[pp].size(); ++qq ) {
+                for ( int pmt_i = 0; pmt_i < peak_int.size(); ++pmt_i) {
 
-                        cout << peak_int[pp][qq] << " ";
-                        create_bat_input(peak_int);
+                    cout << "Average values for slice integrals for pmt number: " << pmt_i+1 << ": ";
+
+                    for ( int slice_i = 0; slice_i < peak_int[pmt_i].size(); ++slice_i ) {
+
+                        cout << peak_int[pmt_i][slice_i] << " ";
+                        create_bat_input( pmt_run, pmt_event, pmt_trigger, peak_int);
                     }
                     cout << endl;
                 }
-                run_then_read_bat(true, x_bat, y_bat);
-
-
-                // for (int i =0; i<x_bat.size();++i) {
-
-                //     cout << x_bat[i]<< endl;
-                // }
+                // run_then_read_bat(true, x_bat, y_bat);
+                points_bat = run_then_read_bat(true);
 
                 TCanvas* cmatch = new TCanvas("cmatch", "cmatch", 700, 700);
                 cmatch->cd();
-                h_fullsize->Draw("");
-                h_fullsize->SetName("BAT-PMT Match");
-                for (int i =0; i<x_bat.size();++i) {
+                h_fullsize->Draw("COLZ");
+                h_fullsize->SetTitle("BAT-PMT Match");
+                for (const auto& point : points_bat) {
 
-                    cout << x_bat[i] << " * ";
                     // Step 3: Add points using TMarker
-                    TMarker* marker5 = new TMarker(x_bat[i], y_bat[i], 29);  // Cross marker
+                    TMarker* marker5 = new TMarker(point.first, point.second, 29);  // Cross marker
                     marker5->SetMarkerColor(kRed);
                     marker5->SetMarkerSize(2);
                     marker5->Draw("same");
                 }
                 cmatch->DrawClone();
+                cmatch->Write("BAT-PMT Match",TObject::kWriteDelete);
+                delete cmatch;
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -689,7 +598,7 @@ int main(int argc, char**argv) {
                     .trg = pmt_trigger,
 
                     .dir = direction,
-                    .prob = (avg_rat*100.),
+                    .prob = (dir_score*100.),
                     .trv_Z = avg_travel_z,
 
                     .quad = quadrant_pmt,
@@ -699,15 +608,17 @@ int main(int argc, char**argv) {
 
                 //----------- Clear vector used for the 4 waveforms  -----------//
 
-                skew_sign.clear();
                 TOT30.clear();
                 TOT20.clear();                
                 skew_ratio.clear();                
-                total_integral.clear();                
+                integrals_wfs.clear();                
+                wf_peaks.clear();                
                 travelled_Z.clear();
                 peak_int.clear();
                 x_bat.clear();
                 y_bat.clear();
+                points_bat.clear();
+                points_cam.clear();
             }
         }
     }
@@ -723,7 +634,7 @@ int main(int argc, char**argv) {
 
                 if ( pmt.pic == cam.pic ) {
                 
-                    if (pmt.quad == cam.quad ) {        // Basic quadrant association
+                    if (pmt.quad == cam.quad ) {        
 
                         if ( pmt.its_alpha == true && cam.its_alpha == true) {
 
@@ -774,8 +685,11 @@ int main(int argc, char**argv) {
 /*  ***************************************************************************************************************************  */
 /*  ***************************************************************************************************************************  */
 
-void create_bat_input(vector<vector<double>> slice_ints) {
+void create_bat_input(double run, double event, double trigger, vector<vector<double>> slice_ints) {
     
+    // We create a file for BAT for eventual debug a posteriori or different studies.
+    // In reality, the best would be to simply call a function from bat that does the fit and retrieves specific information directly to the main script.
+
     /*
     - **run**: The run number.
     - **event**: The event number.
@@ -794,37 +708,38 @@ void create_bat_input(vector<vector<double>> slice_ints) {
 
     ofstream outFile("output_for_bat.txt");
 
-    // Check if the file is open
     if (outFile.is_open()) {
-
-        // Write values separated by tabs
-        // for (int pmt_i = 0; pmt_i < slice_ints.size(); ++i) {
 
         for ( int slice_i = 0; slice_i < slice_ints[0].size(); ++slice_i ) {
 
-            outFile << "20000" << "\t" << 1 << "\t" << 2 << "\t" << slice_i << "\t" << slice_ints[0][slice_i] *vtg_to_nC  << "\t" << slice_ints[1][slice_i] *vtg_to_nC << "\t" << slice_ints[2][slice_i] *vtg_to_nC << "\t" << slice_ints[3][slice_i] *vtg_to_nC << "\n";
+            outFile << run << "\t" << event << "\t" << trigger << "\t" << slice_i;
+            
+            for ( int pmt_i = 0; pmt_i < slice_ints.size(); ++pmt_i) {
+
+                outFile << "\t" << slice_ints[pmt_i][slice_i]*vtg_to_nC;
+            }
+            outFile << "\n";
         }
-
-            // outFile << values[i];
-            // if (i < values.size() - 1) {
-            //     outFile << '\t'; // Add a tab after each value except the last one
-            // }
-        // }
-
-        // Close the file
         outFile.close();
     }
-
-
 }
 
-void run_then_read_bat(bool verbose, vector<double> &x ,vector<double> &y ) {
+// void run_then_read_bat(bool verbose, vector<double> &x ,vector<double> &y ) {
+vector<pair<double,double>> run_then_read_bat(bool verbose) {
 
+    vector<pair<double,double>> points; 
+    
     // Define the command to run the Bash script
-    const char* command = "./BAT_PMTs/./runfit.out -i ./output_for_bat.txt -o bat_alpha_pos.txt -s 0 -e 50 -m association";
+    
+    string bat_running_command = "../BAT_PMTs/./runfit.out -i ./output_for_bat.txt -o bat_alpha_pos.txt -s 0 -e 50 -m association > ";
+    string bat_output_file = "./bat_system_out.txt";
+    // cout << (bat_running_command + bat_output_file).c_str() << endl;
+
+    string command = bat_running_command + bat_output_file;
+    cout << bat_running_command + bat_output_file << endl;
 
     // Run the command using the system function
-    int result = system(command);
+    int result = system(command.c_str());
 
     // Check the result of the system call
     if (result == 0) {
@@ -860,9 +775,10 @@ void run_then_read_bat(bool verbose, vector<double> &x ,vector<double> &y ) {
         }
 
         tie(x_corr,y_corr) = coord_change_pmt(fitted_data[integral].x, fitted_data[integral].y);
-        x.push_back(x_corr);
-        y.push_back(y_corr);
+
+        points.emplace_back(x_corr,y_corr);
     }
+    return points;
 }
 
 void read_file_fitted_results (string file, vector<bayesd_data> &data){
@@ -1032,28 +948,6 @@ void create_and_print_wf_graph_lines (string filename, vector<int> time, shared_
     // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
 }
 
-void create_and_print_wf_graph_lines2 (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, double p1t, double p1a, double p2t, double p2a) {
-
-    TGraph *gWaveform = new TGraph();
-    string newname = filename + "";
-
-    TLine * line1 = new TLine(start1,level1,end1,level1);
-    TLine * line2 = new TLine(start2,level2,end2,level2);
-
-    TMarker *marker1 = new TMarker(p1t, p1a, 43); // Point (6, 36) with style 20
-    TMarker *marker2 = new TMarker(p2t, p2a, 43); // Point (6, 36) with style 20
-
-    for (int k = 0; k < time.size(); k++){
-
-        gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
-    }
-    print_graph_lines2(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, marker1, marker2);
-    
-    // I need to save the canvas to also print the lines
-    // gWaveform->SetName(newname.c_str());
-    // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
-}
-
 void print_graph_lines (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1){
 
     TCanvas *c = new TCanvas("","", 800, 600);
@@ -1080,74 +974,7 @@ void print_graph_lines (TGraph *graph, string title, string x_axis, string y_axi
     c->Write(title.c_str(),TObject::kWriteDelete);
 } 
 
-void print_graph_lines2 (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2){
 
-    TCanvas *c = new TCanvas("","", 800, 600);
-    c->cd();
-    graph->SetTitle(title.c_str());
-    graph->GetXaxis()->SetTitle(x_axis.c_str());
-    graph->GetXaxis()->SetTitleSize(0.045);
-    graph->GetXaxis()->SetTitleOffset(1);
-    graph->GetYaxis()->SetTitle(y_axis.c_str());
-    graph->GetYaxis()->SetTitleSize(0.045);
-    graph->GetYaxis()->SetTitleOffset(1);
-    graph->SetLineColor(kAzure-5);
-    graph->SetLineWidth(3);
-    graph->SetMarkerColor(kAzure-5);
-    // graph->GetYaxis()->SetRangeUser(yMin,yMax);
-    graph->Draw("apl");
-
-    l1->SetLineColor(kRed-7);
-    l1->SetLineWidth(3);
-    l1->SetLineStyle(9);
-    l1->Draw("same");
-
-    l2->SetLineColor(kGray+1);
-    l2->SetLineWidth(3);
-    l2->SetLineStyle(9);
-    l2->Draw("same");
-
-    p1->SetMarkerColor(kOrange); 
-    p2->SetMarkerColor(kOrange); 
-    p1->SetMarkerStyle(23);
-    p2->SetMarkerStyle(23);
-    p1->SetMarkerSize(1.5);
-    p2->SetMarkerSize(1.5);
-    p1->Draw("same");
-    p2->Draw("same");
-
-    c->SetName(title.c_str());
-    c->Write(title.c_str(),TObject::kWriteDelete);
-} 
-
-void movingAverageFilter(std::shared_ptr<std::vector<double>>& input, int windowSize) {
-    // Ensure the window size is valid
-    if (windowSize <= 0) {
-        throw std::invalid_argument("Window size must be positive");
-    }
-
-    // Get the size of the input vector
-    int n = input->size();
-    
-    // Create a temporary vector to hold the filtered values
-    std::vector<double> filtered(n);
-
-    // Apply the moving average filter
-    for (int i = 0; i < n; ++i) {
-        // Determine the window boundaries
-        int start = std::max(0, i - windowSize / 2);
-        int end = std::min(n, i + windowSize / 2 + 1);
-        
-        // Calculate the sum of the values in the window
-        double sum = std::accumulate(input->begin() + start, input->begin() + end, 0.0);
-        
-        // Calculate the average and store it in the temporary vector
-        filtered[i] = sum / (end - start);
-    }
-
-    // Copy the filtered values back to the original vector
-    *input = std::move(filtered);
-}
 
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
  double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
