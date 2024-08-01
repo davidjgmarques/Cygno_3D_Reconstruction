@@ -32,40 +32,17 @@
 #include "../Track_analyzer/Analyzer.h"
 #include "./plotting_functions.h"
 #include "./waveform_analyser.h"
+#include "./bat_functions.h"
 
 
 using namespace std;
 namespace fs = std::experimental::filesystem;
 
-vector <string> trim_name( string full_name, char delimiter); 
-void print_histogram(TH1F *histo, string title, string x_axis, string y_axis);
-void print_graph_simple(TGraph *graph, string title, string x_axis, string y_axis);
-void create_and_print_wf_graph_simple (string filename, vector<int> time, shared_ptr<vector<double>> ampl, string tag);
-void create_and_print_wf_graph_lines (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start, double end, double level);
-void print_graph_lines (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1);
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
  double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
  int ru, int pi, int tr);
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
-void create_bat_input(double run, double event, double trigger, vector<vector<double>> slice_ints);
-vector<pair<double,double>> run_then_read_bat(bool verbose);
-tuple <double,double> coord_change_pmt(double x, double y);
-
-// struct Alpha3D {
-
-//     int run;
-//     int pic;
-//     int trg;
-
-//     double angle_XY; 
-//     double trv_XY;
-//     int quad;
-
-//     double IP_X_cm;
-//     double IP_Y_cm;
-// };
-
 struct AlphaTrackCAM {
 
     int run;
@@ -96,13 +73,6 @@ struct AlphaTrackPMT {
 
 };
 
-struct bayesd_data {
-
-    double run, picture, trigger, peakIndex, L, L_std, x, x_std, y, y_std;
-};
-void read_file_fitted_results (string file, vector<bayesd_data> &data);
-
-
 int main(int argc, char**argv) {
     std::cout << std::boolalpha; // Enable boolalpha
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
@@ -114,15 +84,11 @@ int main(int argc, char**argv) {
     string outputfile = argv[ 3 ]; 
     TFile* file_root = new TFile(outputfile.c_str(),"recreate");
 
-    // ofstream outFile("output_for_bat.txt");
-
     int debug_event = atof(argv[ 4 ]);
     // int debug_trigger = atof(argv[ 5 ]);
 
 
     /* ****************************************  Definition of variables and graphs  ******************************************************************  */
-
-    // TH2F *hSpace         = new TH2F("","",2304,0,2305,2304,0,2305);
 
     vector<int> BeginScPix;
     vector<int> EndScPix;
@@ -159,22 +125,18 @@ int main(int argc, char**argv) {
     vector<double> TOT30;
     vector<double> TOT20;
 
-
     // vector<vector<double>> wfs(4);
 
     bool pmt_PID_total;
 
     // electron drift velocity in LIME, He:CF4 60:40, 800 V/cm 
     const double drift_vel = 5.471; // cm/µs
-
     
     double TOT20_half_way;
     int quadrant_pmt;
 
+    vector<vector<double>> integrals_slices;
 
-    vector<vector<double>> peak_int;
-
-    vector<double> x_bat, y_bat;
     vector<pair<double,double>> points_bat;
     vector<pair<double,double>> points_cam;
 
@@ -186,11 +148,9 @@ int main(int argc, char**argv) {
 
     /* ************* CAM variables ********** */
 
-    //impact point and directionality
     // For alphas (David)
     Int_t NPIP=2000;
     Float_t wFac=3.5;
-  
     // For ER (original from Samuele)
     // Int_t NPIP=80;
     // Float_t wFac=2.5;
@@ -203,11 +163,7 @@ int main(int argc, char**argv) {
 
     bool cam_PID = false;
 
-    /* ************* Combined information ********** */
 
-    double x0, y0, z0;
-    double x1, y1, z1;
-    double theta_angle;
 
     /* ****************************************  Opening root recoed file -- CAMERA ******************************************************************  */
 
@@ -253,8 +209,8 @@ int main(int argc, char**argv) {
     int pmt_channel;    tree_pmt->SetBranchAddress("pmt_wf_channel",    &pmt_channel);
     int pmt_sampling;   tree_pmt->SetBranchAddress("pmt_wf_sampling",   &pmt_sampling);
 
-    Float_t pmt_baseline;   tree_pmt->SetBranchAddress("pmt_wf_baseline",   &pmt_baseline);
-    Float_t pmt_RMS;        tree_pmt->SetBranchAddress("pmt_wf_RMS",        &pmt_RMS);
+    // Float_t pmt_baseline;   tree_pmt->SetBranchAddress("pmt_wf_baseline",   &pmt_baseline);
+    // Float_t pmt_RMS;        tree_pmt->SetBranchAddress("pmt_wf_RMS",        &pmt_RMS);
 
     // Use this method to properly read the array since it's not a real vector and then otherwise reads wronmgly the addresses
     // The max length is 4000 (for slow). For reading the fast, I read just the first 1024 samples (the rest is "past memory")
@@ -285,13 +241,14 @@ int main(int argc, char**argv) {
             for ( int sc_i = 0; sc_i < nSc_red; sc_i++ ) {
 
                 cam_PID = false;
-                cout << "\n\t*Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n" << endl;
+                cout << "\t*Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n" << endl;
 
                 // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //cam cut
                 // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
                 if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
                     
                     cam_PID = true;
+
                     //----------- Build Analyser track  -----------//
 
                     Analyzer Track(Form("Track_run_%i_ev_%i", cam_run, cam_event),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
@@ -302,31 +259,14 @@ int main(int argc, char**argv) {
                     // Track.RemoveNoise(75);
                     Track.RemoveNoise(100);
                     Track.ImpactPoint(Form("Track_event%i_run%i", cam_run, cam_event));
-                    Track.ScaledTrack(Form("Track_event%i_run%i", cam_run, cam_event));
+                    Track.ScaledTrack(Form("Track_rebinned_event%i_run%i", cam_run, cam_event));
                     Track.Direction();
                     Track.ImprCorrectAngle();
                     Track.BuildLineDirection();
 
                     h_fullsize = Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_event%i_run%i", cam_run, cam_event));
-
-
-                    TCanvas* cmatch2 = new TCanvas("cmatch2", "cmatch2", 700, 700);
-                    cmatch2->cd();
-                    h_fullsize->Draw("COLZ");
-
-
                     points_cam = Track.GetLinePoints(matching_slices,"edges");
-
-                    for (const auto& point : points_cam) {
-
-                        TMarker* marker15 = new TMarker(point.first, point.second, 34);  // Cross marker
-                        marker15->SetMarkerColor(kBlack);
-                        marker15->SetMarkerSize(2);
-                        marker15->Draw("same");
-                    }
-                    cmatch2->DrawClone();
-                    cmatch2->Write("CAM Match",TObject::kWriteDelete);
-                    delete cmatch2;
+                    print_BAT_CAM_match(h_fullsize, points_cam, "cam", "CAM Match");
 
                     //----------- Get important track parameters  -----------//
 
@@ -336,8 +276,6 @@ int main(int argc, char**argv) {
                     x_impact = Track.GetXIP() * granularity;
                     y_impact = Track.GetYIP() * granularity;
 
-                    // The y needs to be inverted for this calculation from the way root makes the plots.
-                    // TO BE CROSS CHECKED WITH NEW DATA.
                     if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1;
                     else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
                     else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
@@ -352,49 +290,10 @@ int main(int argc, char**argv) {
                     cout << "--> Angle: " << angle_cam << " degrees." << endl;
                     cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
 
-                    // Manually build the track in a TH2F. Not needed anymore.
-                    /*for ( int pixel = BeginScPix[sc_i]; pixel < EndScPix[sc_i]; pixel++ ){
-                        if ( ZPix[pixel] > 0 ) {
-                            
-                            // hSpace->SetBinContent(hSpace->GetXaxis()->FindBin(XPix[pixel]), hSpace->GetXaxis()->FindBin(YPix[pixel]), ZPix[pixel]);
-                            // NOTA BENE: This correction makes sense for this recoed data. This should always be confirmed with a "debug" picture with the new version of the reco.
-                            
-                            // hSpace->SetBinContent(hSpace->GetXaxis()->FindBin(2305-XPix[pixel]), hSpace->GetXaxis()->FindBin(2305-YPix[pixel]), ZPix[pixel]);
-                            hSpace->Fill(2305-XPix[pixel], 2305-YPix[pixel], ZPix[pixel]);      
-                        }
-                    }
-                    TCanvas* c_track_cam = new TCanvas("c_track_cam","c_track_cam",3500,1500);
-                    c_track_cam->cd();      
-                    hSpace->DrawCopy("COLZ");
-                    c_track_cam->Write("Picture",TObject::kWriteDelete);
-                    */
+                    Track.PlotandSavetoFileCOLZ(Form("Track_ev%i_run%i", cam_run, cam_event));          // Saves TH2D, colz, in root file
+                    Track.PlotandSavetoFileDirectionalFull("X-Y Analyser");                             // Saves the directionality plots all together, in root file
 
-                    //----------- Analyser saving options  -----------//
-
-                    // Track.SavetoFile("test1");               // Saves TH2D in root file
-                    // Track.SavetoFileDavid("test5");          // Saves TH2D, colz, in root file
-                    // Track.SavePic("test2.png");              // saves png of track in folder with a bunch of variables.
-                    // Track.SavePicDir("test3.png");           // Saves 3 plots with the real direction calculation with Samuele's code
-                    // Track.SaveRootFile("test4.root");        // Saves a couple plots in a different root file.
-                    Track.PlotandSavetoFileCOLZ(Form("Track_ev%i_run%i", cam_run, cam_event));            // Saves TH2D, colz, in root file
-                    Track.PlotandSavetoFileDirectionalFull("X-Y Analyser");        // Saves the directionality plots all together, in root file
-
-                    // Track profiles
-                    TCanvas* c_profile = new TCanvas("c_profile","c_profile",1000,500); 
-                    c_profile->Divide(1,2);
-
-                    c_profile->cd(1);
-                    TH1D* TrackProfileTrans = Track.FillProfile(false);
-                    TrackProfileTrans->SetTitle("Transversal Profile");
-                    TrackProfileTrans->Draw();
-
-                    c_profile->cd(2); 
-                    TH1D* TrackProfileLongi = Track.FillProfile(true);
-                    TrackProfileLongi->SetTitle("Longitudinal Profile"); 
-                    TrackProfileLongi->Draw();
-                    c_profile->Write("Track profiles",TObject::kWriteDelete);
-                    c_profile->DrawClone();
-                    delete c_profile;
+                    printTrackProfiles( Track.FillProfile(false), Track.FillProfile(true), "Track profiles");
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -428,22 +327,15 @@ int main(int argc, char**argv) {
         
         tree_pmt->GetEntry(pmt_wf);
 
-        // cout << "PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; channel: " << pmt_channel << "; sampling: " << pmt_sampling << endl;
-
         shared_ptr<vector<double>> fast_waveform = make_shared<vector<double>>();
         shared_ptr<vector<double>> slow_waveform = make_shared<vector<double>>();
-
-        // FOR PURE PMT ANALYSIS, A CUT TO SELECT ALPHAS WOULD BE NEEDED
-        // TO DO MIXED ANALYSIS, I CAN AND SHOULD CUT ON THE CAMERA (TO ALLOW ASSOCIATION)
 
         // if ( pmt_event == debug_event && pmt_trigger == debug_trigger && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
         // if ( pmt_event == debug_event && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
         if ( pmt_event == debug_event && pmt_trigger == 0 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
 
             
-            if ( pmt_channel == 1) {
-                cout << "\n\t*PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
-            }
+            if ( pmt_channel == 1) cout << "\n\t*PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
 
             //-----------  Put branch information into vector for further analysis  --------------------------------------------//
 
@@ -486,7 +378,7 @@ int main(int argc, char**argv) {
             //-----------  Getting information for BAT  -------------------------------------------------------------------------//
 
 
-            sliceWaveform_BAT(fast_waveform, peak_int, matching_slices, TOT20_begin, TOT20_end);
+            sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
             
 
             //-----------  Getting travelled Z  -----------//
@@ -514,7 +406,7 @@ int main(int argc, char**argv) {
             //----------- Make final waveform plot with all the information  ---------------------------------------------------//
 
 
-            create_and_print_wf_graph_lines2(Form("WFtest_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
+            create_and_print_wf_graph_lines2(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
             time_fast_wf, fast_waveform,
             TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
             TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
@@ -530,9 +422,8 @@ int main(int argc, char**argv) {
 
                 //----------- Calculate direction in Z, and respective score  ------------------------//
 
-                verbose_dir_score = true;
                 direction = 0, dir_score = 0;
-                getDirectionScore(skew_ratio, direction, dir_score, verbose_dir_score);
+                getDirectionScore(skew_ratio, direction, dir_score, false);
 
                 if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
                 else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
@@ -558,37 +449,14 @@ int main(int argc, char**argv) {
                 cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
 
 
-                //----------- Generate BAT input file and run routine ------//
+                //----------- Run BAT routine ----------------------------//
 
-                for ( int pmt_i = 0; pmt_i < peak_int.size(); ++pmt_i) {
+                create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "input_for_bat.txt");
+                run_bat("input_for_bat.txt", "output_from_bat.txt");
+                read_bat("output_from_bat.txt",points_bat, true);
+                print_BAT_CAM_match(h_fullsize, points_bat, "bat", "BAT Match");
 
-                    cout << "Average values for slice integrals for pmt number: " << pmt_i+1 << ": ";
 
-                    for ( int slice_i = 0; slice_i < peak_int[pmt_i].size(); ++slice_i ) {
-
-                        cout << peak_int[pmt_i][slice_i] << " ";
-                        create_bat_input( pmt_run, pmt_event, pmt_trigger, peak_int);
-                    }
-                    cout << endl;
-                }
-                // run_then_read_bat(true, x_bat, y_bat);
-                points_bat = run_then_read_bat(true);
-
-                TCanvas* cmatch = new TCanvas("cmatch", "cmatch", 700, 700);
-                cmatch->cd();
-                h_fullsize->Draw("COLZ");
-                h_fullsize->SetTitle("BAT-PMT Match");
-                for (const auto& point : points_bat) {
-
-                    // Step 3: Add points using TMarker
-                    TMarker* marker5 = new TMarker(point.first, point.second, 29);  // Cross marker
-                    marker5->SetMarkerColor(kRed);
-                    marker5->SetMarkerSize(2);
-                    marker5->Draw("same");
-                }
-                cmatch->DrawClone();
-                cmatch->Write("BAT-PMT Match",TObject::kWriteDelete);
-                delete cmatch;
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -606,6 +474,7 @@ int main(int argc, char**argv) {
                     .its_alpha = pmt_PID_total
                 });
 
+
                 //----------- Clear vector used for the 4 waveforms  -----------//
 
                 TOT30.clear();
@@ -614,9 +483,7 @@ int main(int argc, char**argv) {
                 integrals_wfs.clear();                
                 wf_peaks.clear();                
                 travelled_Z.clear();
-                peak_int.clear();
-                x_bat.clear();
-                y_bat.clear();
+                integrals_slices.clear();
                 points_bat.clear();
                 points_cam.clear();
             }
@@ -625,6 +492,45 @@ int main(int argc, char**argv) {
     reco_data_pmt->Close();
 
     /* **************************************  COMBINED ANALYSIS  ********************************************************************  */
+
+    /* ************* Combined information ********** */
+
+    int run, picture, trigger;
+    double IP_X, IP_Y, IP_Z;
+    double track_end_X, track_end_Y, track_end_Z;
+    double Z_angle, XY_angle;
+    double Z_length, XY_length;
+    double full_length;
+    double pmt_direction;
+    double pmt_direction_score;
+    int cam_quad, pmt_quad;
+    // bool cam_PID, pmt_PID;
+    double cam_energy, pmt_energy;
+
+    TTree *tree_3D = new TTree("3D_Alpha_Tracks", "3D Alpha Tracks");
+
+    tree_3D->Branch("run", &run, "run/I");
+    tree_3D->Branch("picture", &picture, "picture/I");
+    tree_3D->Branch("trigger", &trigger, "trigger/I");
+    tree_3D->Branch("IP_X", &IP_X, "IP_X/D");
+    tree_3D->Branch("IP_Y", &IP_Y, "IP_Y/D");
+    tree_3D->Branch("IP_Z", &IP_Z, "IP_Z/D");
+    tree_3D->Branch("track_end_X", &track_end_X, "track_end_X/D");
+    tree_3D->Branch("track_end_Y", &track_end_Y, "track_end_Y/D");
+    tree_3D->Branch("track_end_Z", &track_end_Z, "track_end_Z/D");
+    tree_3D->Branch("Z_angle", &Z_angle, "Z_angle/D");
+    tree_3D->Branch("XY_angle", &XY_angle, "XY_angle/D");
+    tree_3D->Branch("Z_length", &Z_length, "Z_length/D");
+    tree_3D->Branch("XY_length", &XY_length, "XY_length/D");
+    tree_3D->Branch("full_length", &full_length, "full_length/D");
+    tree_3D->Branch("pmt_direction", &pmt_direction, "pmt_direction/D");
+    tree_3D->Branch("pmt_direction_score", &pmt_direction_score, "pmt_direction_score/D");
+    tree_3D->Branch("cam_quad", &cam_quad, "cam_quad/I");
+    tree_3D->Branch("pmt_quad", &pmt_quad, "pmt_quad/I");
+    // tree_3D->Branch("cam_PID", &cam_PID, "cam_PID/O");
+    // tree_3D->Branch("pmt_PID", &pmt_PID, "pmt_PID/O");
+    tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
+    tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
 
     for (const auto& cam : CAM_alphas) {
 
@@ -642,29 +548,32 @@ int main(int argc, char**argv) {
                             
                             //----------- Creating 3D alpha track information  -----------//
 
-                            x0 = cam.IP_X_cm;
-                            y0 = cam.IP_Y_cm;               
-                            z0 = 25.0;                          // Absolute Z fixed.
+                            IP_X = cam.IP_X_cm;
+                            IP_Y = cam.IP_Y_cm;               
+                            IP_Z = 25.0;                          // Absolute Z fixed.
 
-                            x1 = x0 + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
-                            y1 = y0 + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
-                            z1 = z0 + ( pmt.trv_Z  * pmt.dir);
+                            track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
+                            track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
+                            track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);
 
-                            double theta_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
+                            Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
 
-                            double length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
+                            full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
 
                             cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
-                            cout << "--> Position, X: " << x0 << "; Y: " << y0  << endl;
+                            cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
                             cout << "--> Travelled XY: "    << cam.trv_XY   << endl;
                             cout << "--> Angle XY (#phi): "        << cam.angle_XY << endl;
                             cout << "--> Travelled Z: "     << pmt.trv_Z    << endl;
                             cout << "--> Direction in Z: "  << pmt.dir      << " at " << abs(pmt.prob) << " score" << endl;
-                            cout << "--> Angle Z (#theta): "     << theta_angle  << endl;
-                            cout << "--> 3D alpha length (cm): " << length  << endl;
+                            cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
+                            cout << "--> 3D alpha length (cm): " << full_length  << endl;
 
-                            build_3D_vector(x0,x1,y0,y1,z0,z1,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, theta_angle, length, pmt.run, pmt.pic, pmt.trg);
+                            file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
+                            build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
                         
+                            tree_3D->Fill();
+
                         } else continue;
                     } else continue;
                 } else continue;
@@ -672,6 +581,8 @@ int main(int argc, char**argv) {
         } //close for pmt
     } //close for cam
 
+    file_root->cd();
+    tree_3D->Write();
 
     file_root->Close();
     cout << "**Finished**" << endl;
@@ -684,149 +595,6 @@ int main(int argc, char**argv) {
 /*  ***************************************************************************************************************************  */
 /*  ***************************************************************************************************************************  */
 /*  ***************************************************************************************************************************  */
-
-void create_bat_input(double run, double event, double trigger, vector<vector<double>> slice_ints) {
-    
-    // We create a file for BAT for eventual debug a posteriori or different studies.
-    // In reality, the best would be to simply call a function from bat that does the fit and retrieves specific information directly to the main script.
-
-    /*
-    - **run**: The run number.
-    - **event**: The event number.
-    - **trigger**: The trigger number.
-    - **peak index**: The index indicating the position of the peak in the waveform.
-    - **L1**: The integral of the **PMT 1**.
-    - **L2**: The integral of the **PMT 2**.
-    - **L3**: The integral of the **PMT 3**.
-    - **L4**: The integral of the **PMT 4**.
-
-    --> The integral must be given in nC
-    --> I[nC] = I[ADU] / 4096 * 4/3 * 1/50
-    */
-    
-    double vtg_to_nC = (1./4096.) * (4./3.) * (1./50.);
-
-    ofstream outFile("output_for_bat.txt");
-
-    if (outFile.is_open()) {
-
-        for ( int slice_i = 0; slice_i < slice_ints[0].size(); ++slice_i ) {
-
-            outFile << run << "\t" << event << "\t" << trigger << "\t" << slice_i;
-            
-            for ( int pmt_i = 0; pmt_i < slice_ints.size(); ++pmt_i) {
-
-                outFile << "\t" << slice_ints[pmt_i][slice_i]*vtg_to_nC;
-            }
-            outFile << "\n";
-        }
-        outFile.close();
-    }
-}
-
-// void run_then_read_bat(bool verbose, vector<double> &x ,vector<double> &y ) {
-vector<pair<double,double>> run_then_read_bat(bool verbose) {
-
-    vector<pair<double,double>> points; 
-    
-    // Define the command to run the Bash script
-    
-    string bat_running_command = "../BAT_PMTs/./runfit.out -i ./output_for_bat.txt -o bat_alpha_pos.txt -s 0 -e 50 -m association > ";
-    string bat_output_file = "./bat_system_out.txt";
-    // cout << (bat_running_command + bat_output_file).c_str() << endl;
-
-    string command = bat_running_command + bat_output_file;
-    cout << bat_running_command + bat_output_file << endl;
-
-    // Run the command using the system function
-    int result = system(command.c_str());
-
-    // Check the result of the system call
-    if (result == 0) {
-        std::cout << "Script executed successfully." << std::endl;
-    } else {
-        std::cerr << "Error executing script." << std::endl;
-    }
-
-    double x_corr, y_corr;
-    vector<double> x_bat, y_bat;
-
-    vector<bayesd_data> fitted_data;
-
-    string fitted_results = "bat_alpha_pos.txt";
-
-    read_file_fitted_results(fitted_results, fitted_data);
-
-    for ( int integral = 0; integral < fitted_data.size(); ++integral) {
-
-        if (verbose) {
-            cout << "*Info from this file:" << endl;
-            cout << "run: " << fitted_data[integral].run << " * ";
-            cout << "picture: " << fitted_data[integral].picture << " * ";
-            cout << "trigger: " << fitted_data[integral].trigger << " * ";
-            cout << "peakIndex: " << fitted_data[integral].peakIndex << " * ";
-            cout << "L: " << fitted_data[integral].L << " * ";
-            cout << "L_std: " << fitted_data[integral].L_std << " * ";
-            cout << "x: " << fitted_data[integral].x << " * ";
-            cout << "x_std: " << fitted_data[integral].x_std << " * ";
-            cout << "y: " << fitted_data[integral].y << " * ";
-            cout << "y_std: " << fitted_data[integral].y_std << " * ";
-            cout << endl; // To separate entries for different `integral` values
-        }
-
-        tie(x_corr,y_corr) = coord_change_pmt(fitted_data[integral].x, fitted_data[integral].y);
-
-        points.emplace_back(x_corr,y_corr);
-    }
-    return points;
-}
-
-void read_file_fitted_results (string file, vector<bayesd_data> &data){
-    // run_number[0]  event[1]  trigger[2]  peakIndex[3]  L[4]  L_std[5] x[6]  x_std[7]  y[8]  y_std[9]
-
-    string line;
-    ifstream myfile;
-
-    double run, event, trigger, peakIndex, L, L_std, x, x_std, y, y_std;
-
-    myfile.open(file.c_str());
-    vector <string> name_trim = trim_name(file, '/');
-    cout << "\nFitted results file opened: " << name_trim.back() << endl;
-    cout << "Writing event to vector..." << endl;
-
-    while ( getline ( myfile, line ) ) {
-
-        istringstream iss ( line );	//creates string consisting of a line
-        string token;
-
-        getline (iss, token, '\t'); run = (double) stod(token);         
-        getline (iss, token, '\t'); event = (double) stod(token);       
-        getline (iss, token, '\t'); trigger = (double) stod(token);     
-        getline (iss, token, '\t'); peakIndex = (double) stod(token);   
-        getline (iss, token, '\t'); L = (double) stod(token);           
-        getline (iss, token, '\t'); L_std = (double) stod(token);       
-        getline (iss, token, '\t'); x = (double) stod(token);           
-        getline (iss, token, '\t'); x_std = (double) stod(token);       
-        getline (iss, token, '\t'); y = (double) stod(token);           
-        getline (iss, token, '\t'); y_std = (double) stod(token);       
-
-        data.push_back( {run, event, trigger, peakIndex, L, L_std, x, x_std, y, y_std} );
-    }
-    myfile.close();
-}
-
-tuple <double,double> coord_change_pmt(double x, double y) {   //pmt cm to pixels
-
-    double x_new_tmp, y_new_tmp;
-    x_new_tmp = x * 1970./33. + 180;
-    // y_new_tmp = 2304 - (170 + y*1970./33.);
-    y_new_tmp = y * 1970./33. + 370;
-
-    return make_tuple( x_new_tmp, y_new_tmp );
-}
-
-
-
 
 
 // Function to calculate indices for clusters based on reduced pixels
@@ -865,115 +633,6 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
 
     sc_redpix_start.clear(); // Clear the temporary storage
 }
-
-
-vector <string> trim_name( string full_name, char delimiter) {
-
-    string trimmed_name;
-    vector <string> tokens;
-    stringstream check1(full_name);
-    string intermediate;
-    while(getline(check1, intermediate, delimiter)) tokens.push_back(intermediate);
-
-    return tokens;
-}
-
-void print_histogram(TH1F *histo, string title, string x_axis, string y_axis){
-
-    TCanvas *c = new TCanvas("","", 800, 500);
-    c->cd();
-    histo->SetTitle(title.c_str());
-    histo->SetLineColor(kAzure-5);
-    histo->SetLineWidth(1);
-    histo->SetFillStyle(3003);
-    histo->SetFillColor(kAzure+5);
-    histo->GetYaxis()->SetTitle(y_axis.c_str());
-    histo->GetYaxis()->SetTitleOffset(1.0);
-    histo->GetYaxis()->SetTitleSize(0.045);
-    histo->GetXaxis()->SetTitleOffset(1.0);
-    histo->GetXaxis()->SetTitleSize(0.045);
-    histo->GetXaxis()->SetTitle(x_axis.c_str());
-    histo->Draw("hist");
-    // histo->Write();
-}
-
-void print_graph_simple(TGraph *graph, string title, string x_axis, string y_axis){ //}, double yMin, double yMax){
-
-    TCanvas *c = new TCanvas("","", 800, 500);
-    c->cd();
-    graph->SetTitle(title.c_str());
-    graph->GetXaxis()->SetTitle(x_axis.c_str());
-    graph->GetXaxis()->SetTitleSize(0.045);
-    graph->GetXaxis()->SetTitleOffset(1);
-    graph->GetYaxis()->SetTitle(y_axis.c_str());
-    graph->GetYaxis()->SetTitleSize(0.045);
-    graph->GetYaxis()->SetTitleOffset(1);
-    graph->SetLineColor(kAzure-5);
-    graph->SetMarkerColor(kAzure-5);
-    // graph->SetMarkerStyle(2);
-    // graph->GetYaxis()->SetRangeUser(0,2304);
-    // graph->GetXaxis()->SetLimits(0,2304);
-    graph->Draw("al");
-} 
-
-void create_and_print_wf_graph_simple (string filename, vector<int> time, shared_ptr<vector<double>> ampl, string tag) {
-
-    TGraph *gWaveform = new TGraph();
-    string newname = filename + "_" + tag;
-
-    for (int k = 0; k < time.size(); k++){
-
-        gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
-    }
-    print_graph_simple(gWaveform, newname, "t [ms]", "Amplitude [mV]");
-    gWaveform->SetName(newname.c_str());
-    // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
-}
-
-void create_and_print_wf_graph_lines (string filename, vector<int> time, shared_ptr<vector<double>> ampl, double start, double end, double level) {
-
-    TGraph *gWaveform = new TGraph();
-    string newname = filename + "";
-
-    TLine * line1 = new TLine(start,level,end,level);
-
-    for (int k = 0; k < time.size(); k++){
-
-        gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
-    }
-    print_graph_lines(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1);
-    
-    // I need to save the canvas to also print the lines
-    // gWaveform->SetName(newname.c_str());
-    // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
-}
-
-void print_graph_lines (TGraph *graph, string title, string x_axis, string y_axis, double yMin, double yMax, TLine *l1){
-
-    TCanvas *c = new TCanvas("","", 800, 600);
-    c->cd();
-    graph->SetTitle(title.c_str());
-    graph->GetXaxis()->SetTitle(x_axis.c_str());
-    graph->GetXaxis()->SetTitleSize(0.045);
-    graph->GetXaxis()->SetTitleOffset(1);
-    graph->GetYaxis()->SetTitle(y_axis.c_str());
-    graph->GetYaxis()->SetTitleSize(0.045);
-    graph->GetYaxis()->SetTitleOffset(1);
-    graph->SetLineColor(kAzure-5);
-    graph->SetLineWidth(2);
-    graph->SetMarkerColor(kAzure-5);
-    // graph->GetYaxis()->SetRangeUser(yMin,yMax);
-    graph->Draw("apl");
-
-    l1->SetLineColor(kRed-4);
-    l1->SetLineWidth(3);
-    l1->SetLineStyle(1);
-    l1->Draw("same");
-
-    c->SetName(title.c_str());
-    c->Write(title.c_str(),TObject::kWriteDelete);
-} 
-
 
 
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,

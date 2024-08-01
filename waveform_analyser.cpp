@@ -1,17 +1,9 @@
-// #include "TGraph.h"
-// #include "TCanvas.h"
-// #include "TLegend.h"
-// #include "TMarker.h"
-// #include "TStyle.h"
-// #include "TLine.h"
-// #include "TAxis.h"
 #include <vector>
 #include <memory>
 #include <stdexcept>
 #include <numeric>
 #include <iostream>
 #include <algorithm>
-
 
 #include "waveform_analyser.h"
 

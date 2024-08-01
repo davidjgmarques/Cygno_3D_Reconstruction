@@ -11,7 +11,7 @@ LDFLAGS = `root-config --glibs` -lSpectrum
 TARGET = alpha_3d.out
 
 # Source files
-SRCS = Alpha_3D_LIME.cpp ../Track_analyzer/Analyzer.cpp plotting_functions.cpp waveform_analyser.cpp
+SRCS = Alpha_3D_LIME.cpp ../Track_analyzer/Analyzer.cpp plotting_functions.cpp waveform_analyser.cpp bat_functions.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)

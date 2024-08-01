@@ -24,11 +24,4 @@ void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_sc
 void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, bool &pmt_PID_total, bool verbose = true);
 
 
-
-
-
-
-
-
-
 #endif
