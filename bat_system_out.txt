@@ -16,8 +16,8 @@ Starting fit for 'association reconstruction'
 Summary : Marginalize using Metropolis
 Summary : Pre-run Metropolis MCMC for model "association" ...
 Summary :  --> Perform MCMC pre-run with 6 chains, each with maximum 100000 iterations
-Summary :  --> Set of 6 Markov chains converged within 5000 iterations, and all scales are adjusted.
-Summary :  --> 9 updates to multivariate proposal function's covariances were made.
+Summary :  --> Set of 6 Markov chains converged within 5500 iterations, and all scales are adjusted.
+Summary :  --> 10 updates to multivariate proposal function's covariances were made.
 Summary : Run Metropolis MCMC for model "association" ...
 Summary :  --> Perform MCMC run with 6 chains, each with 10000 iterations.
 Summary :  --> Markov chains ran for 10000 iterations.
@@ -35,15 +35,6 @@ Starting fit for 'association reconstruction'
 Summary : Marginalize using Metropolis
 Summary : Pre-run Metropolis MCMC for model "association" ...
 Summary :  --> Perform MCMC pre-run with 6 chains, each with maximum 100000 iterations
-Summary :  --> Set of 6 Markov chains converged within 4500 iterations, and all scales are adjusted.
-Summary :  --> 8 updates to multivariate proposal function's covariances were made.
-Summary : Run Metropolis MCMC for model "association" ...
-Summary :  --> Perform MCMC run with 6 chains, each with 10000 iterations.
-Summary :  --> Markov chains ran for 10000 iterations.
-Starting fit for 'association reconstruction'
-Summary : Marginalize using Metropolis
-Summary : Pre-run Metropolis MCMC for model "association" ...
-Summary :  --> Perform MCMC pre-run with 6 chains, each with maximum 100000 iterations
 Summary :  --> Set of 6 Markov chains converged within 5000 iterations, and all scales are adjusted.
 Summary :  --> 9 updates to multivariate proposal function's covariances were made.
 Summary : Run Metropolis MCMC for model "association" ...
@@ -53,8 +44,17 @@ Starting fit for 'association reconstruction'
 Summary : Marginalize using Metropolis
 Summary : Pre-run Metropolis MCMC for model "association" ...
 Summary :  --> Perform MCMC pre-run with 6 chains, each with maximum 100000 iterations
-Summary :  --> Set of 6 Markov chains converged within 4000 iterations, and all scales are adjusted.
-Summary :  --> 7 updates to multivariate proposal function's covariances were made.
+Summary :  --> Set of 6 Markov chains converged within 4500 iterations, and all scales are adjusted.
+Summary :  --> 8 updates to multivariate proposal function's covariances were made.
+Summary : Run Metropolis MCMC for model "association" ...
+Summary :  --> Perform MCMC run with 6 chains, each with 10000 iterations.
+Summary :  --> Markov chains ran for 10000 iterations.
+Starting fit for 'association reconstruction'
+Summary : Marginalize using Metropolis
+Summary : Pre-run Metropolis MCMC for model "association" ...
+Summary :  --> Perform MCMC pre-run with 6 chains, each with maximum 100000 iterations
+Summary :  --> Set of 6 Markov chains converged within 6000 iterations, and all scales are adjusted.
+Summary :  --> 11 updates to multivariate proposal function's covariances were made.
 Summary : Run Metropolis MCMC for model "association" ...
 Summary :  --> Perform MCMC run with 6 chains, each with 10000 iterations.
 Summary :  --> Markov chains ran for 10000 iterations.

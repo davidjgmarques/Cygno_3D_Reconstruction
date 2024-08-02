@@ -3,6 +3,8 @@
 #include <iostream>
 #include <tuple>
 #include <sstream>
+#include <algorithm>
+
 
 #include "bat_functions.h"
 
@@ -77,22 +79,22 @@ void create_bat_input(double run, double event, double trigger, std::vector<std:
 
 void run_bat ( const std::string &input_for_bat, const std::string &output_from_bat ) {
 
-    string bat_executable   = "../BAT_PMTs/./runfit.out";
-    string bat_input        = " -i " + input_for_bat;
-    string bat_output       = " -o " + output_from_bat;
-    string bat_start        = " -s 0";
-    string bat_end          = " -e 10000";
-    string bat_method       = " -m association";
-    string bat_sys_out      = " > bat_system_out.txt";
-    string bat_command      = bat_executable + bat_input + bat_output + bat_start + bat_end + bat_method + bat_sys_out;
+    std::string bat_executable   = "../BAT_PMTs/./runfit.out";
+    std::string bat_input        = " -i " + input_for_bat;
+    std::string bat_output       = " -o " + output_from_bat;
+    std::string bat_start        = " -s 0";
+    std::string bat_end          = " -e 10000";
+    std::string bat_method       = " -m association";
+    std::string bat_sys_out      = " > bat_system_out.txt";
+    std::string bat_command      = bat_executable + bat_input + bat_output + bat_start + bat_end + bat_method + bat_sys_out;
     
     std::cout << std::endl;
     std::cout << "Launching BAT script ..." << std::endl;
-    cout << bat_command << endl;
+    std::cout << bat_command << std::endl;
 
     int result = system(bat_command.c_str());
 
-    if (result == 0)    std::cout << "\n -> Script executed successfully." << std::endl;
+    if (result == 0)    std::cout << "-> Script executed successfully." << std::endl;
     else                std::cerr << " !!! Error executing script." << std::endl;
 }
 
@@ -108,13 +110,13 @@ void read_bat ( const std::string &output_from_bat, std::vector<std::pair<double
     double run, event, trigger, peakIndex, L, L_std, x, x_std, y, y_std;
 
     myfile.open(output_from_bat);
-    std::vector<string> name_trim = trim_name(output_from_bat, '/');
-    cout << "\nFile opened: " << name_trim.back() << endl;
+    std::vector<std::string> name_trim = trim_name(output_from_bat, '/');
+    // std::cout << "\nFile opened: " << name_trim.back() << std::endl;
 
     while ( getline ( myfile, line ) ) {
 
-        istringstream iss ( line );	//creates string consisting of a line
-        string token;
+        std::istringstream iss ( line );	//creates std::string consisting of a line
+        std::string token;
 
         getline (iss, token, '\t'); run         = static_cast<double>(stod(token));         
         getline (iss, token, '\t'); event       = static_cast<double>(stod(token));       
@@ -129,17 +131,47 @@ void read_bat ( const std::string &output_from_bat, std::vector<std::pair<double
 
         // data.push_back( {run, event, trigger, peakIndex, L, L_std, x, x_std, y, y_std} );
 
+        coord_change_pmt(x,y);
+        fitted_points.emplace_back(x,y);
+
         if (verbose) {
             std::cout <<
                 "run: " << run << "; picture: " <<  event << "; trigger: " << trigger   << "; peakIndex: " << peakIndex <<
                 "; L: "  << L << "; L_std: " << L_std << "; x: " << x  << "; x_std: " << x_std << "; y: " << y  << "; y_std: " << y_std 
-                << endl;
+                << std::endl;
         }
-
-        coord_change_pmt(x,y);
-        fitted_points.emplace_back(x,y);
-
     }
     myfile.close();
 }
 
+// Function to calculate the X and Y distance between two list of points, making sure that the points are in crescent order of X.
+void calculate_distance(const std::vector<std::pair<double, double>>& points1, const std::vector<std::pair<double, double>>& points2, std::vector<std::pair<double, double>>& distances, bool verbose) {
+    
+    if (points1.size() != points2.size()) {
+        std::cerr << "Error: The input vectors must have the same size." << std::endl;
+        return;
+    }
+
+    std::vector<std::pair<double, double>> ordered_points1 = points1;
+    std::vector<std::pair<double, double>> ordered_points2 = points2;
+
+    std::sort(ordered_points1.begin(), ordered_points1.end(), [](const std::pair<double, double>& p1, const std::pair<double, double>& p2) {
+        return p1.first < p2.first;
+    });
+
+    std::sort(ordered_points2.begin(), ordered_points2.end(), [](const std::pair<double, double>& p1, const std::pair<double, double>& p2) {
+        return p1.first < p2.first;
+    });
+
+    for (int i = 0; i < ordered_points1.size(); ++i) {
+        double x_dist = ordered_points2[i].first - ordered_points1[i].first;
+        double y_dist = ordered_points2[i].second - ordered_points1[i].second;
+        distances.emplace_back(x_dist, y_dist);
+
+        if (verbose) {
+            std::cout << "Point 1: (" << ordered_points1[i].first << ", " << ordered_points1[i].second << ")" << std::endl;
+            std::cout << "Point 2: (" << ordered_points2[i].first << ", " << ordered_points2[i].second << ")" << std::endl;
+            std::cout << "Distance: (" << x_dist << ", " << y_dist << ")" << std::endl;
+        }
+    }
+}

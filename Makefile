@@ -2,7 +2,7 @@
 CXX = c++
 
 # Compiler flags
-CXXFLAGS = `root-config --cflags`
+CXXFLAGS = `root-config --cflags` -O3 
 
 # Linker flags
 LDFLAGS = `root-config --glibs` -lSpectrum

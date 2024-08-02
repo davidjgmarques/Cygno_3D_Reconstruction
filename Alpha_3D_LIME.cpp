@@ -1,48 +1,26 @@
-#include <sstream>
-#include <fstream>
-#include <stdio.h>
 #include <iostream>
-#include <experimental/filesystem>
-#include <string>
 #include <numeric>
 #include "TFile.h"
-#include "TH1F.h"
+// #include "TH1F.h"
 #include "TH2F.h"
-#include "TH3F.h"
-#include "TF1.h"
-#include "TGraph.h"
-#include "TGraph2D.h"
-#include "TPolyLine3D.h"
-#include "TColor.h"
-#include "TGraphErrors.h"
-#include "TGraphMultiErrors.h"
+// #include "TF1.h"
+// #include "TGraph.h"
+#include "TMath.h"
 #include "TCanvas.h"
-#include "TLegend.h"
 #include "TMarker.h"
-#include "TStyle.h"
 #include "TApplication.h"
 #include "TLine.h"
-#include "TROOT.h"
-#include "TKey.h"
-#include "TSpectrum.h"
-#include "TVirtualFitter.h"
 #include "TTree.h"
-#include "TBrowser.h"
 
-#include "../Track_analyzer/Analyzer.h"
+#include "../Track_analyzer/Analyzer.h"   //Change the path to the correct one
 #include "./plotting_functions.h"
 #include "./waveform_analyser.h"
 #include "./bat_functions.h"
 
-
 using namespace std;
-namespace fs = std::experimental::filesystem;
-
-void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
- double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
- int ru, int pi, int tr);
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
+
 struct AlphaTrackCAM {
 
     int run;
@@ -56,6 +34,8 @@ struct AlphaTrackCAM {
     double IP_Y_cm;
 
     bool its_alpha;
+
+    vector<pair<double,double>> track_cam;
 };
 
 struct AlphaTrackPMT {
@@ -70,6 +50,8 @@ struct AlphaTrackPMT {
     int quad;
 
     bool its_alpha;
+
+    vector<pair<double,double>> track_pmt;
 
 };
 
@@ -86,7 +68,6 @@ int main(int argc, char**argv) {
 
     int debug_event = atof(argv[ 4 ]);
     // int debug_trigger = atof(argv[ 5 ]);
-
 
     /* ****************************************  Definition of variables and graphs  ******************************************************************  */
 
@@ -140,8 +121,10 @@ int main(int argc, char**argv) {
     vector<pair<double,double>> points_bat;
     vector<pair<double,double>> points_cam;
 
-    TH2F* h_fullsize = new TH2F(); 
-
+    // Eventually, if one wants to save the original image, but that would require creating a new canvas and histogram for each picture...
+    TCanvas* original_image = new TCanvas("Original Image", "Original Image", 700, 700);
+    TH2F* h_original = new TH2F("Original_Image", "Original_Image", 2304, 0, 2304, 2304, 0, 2304);
+    
     // Number of slices to be used for the track matching (CAM <-> BAT)
     int matching_slices = 5;
 
@@ -162,8 +145,6 @@ int main(int argc, char**argv) {
     const double granularity = 0.0155; // cm/pixel 
 
     bool cam_PID = false;
-
-
 
     /* ****************************************  Opening root recoed file -- CAMERA ******************************************************************  */
 
@@ -191,8 +172,10 @@ int main(int argc, char**argv) {
     // vector<UInt_t> ScNpixels;       ScNpixels.reserve(nscmax);
 
     vector<float> sc_redpixID;      sc_redpixID.reserve(150000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
-    vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
-    vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
+    vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
+    vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
+    // vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
+    // vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
     vector<float> ZPix;             ZPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iz",       ZPix.data());  
 
     /* ****************************************  Opening root recoed file -- PMT ******************************************************************  */
@@ -223,6 +206,7 @@ int main(int argc, char**argv) {
 
     /* **********************************************  Analysis  CAMERA  ********************************************** */
 
+    cout << "\n\n************   Analysis  CAMERA    ************\n\n" << endl;
     vector<AlphaTrackCAM> CAM_alphas;
     Int_t nentries = (Int_t)tree_cam->GetEntries();
     for (Int_t cam_entry = 0; cam_entry < nentries; cam_entry++) {
@@ -230,7 +214,8 @@ int main(int argc, char**argv) {
         tree_cam->GetEntry(cam_entry);
         // cout << "Cam run: " << cam_run << "; event(pic): " << cam_event << "; nSc: " << nSc << endl;
 
-        if ( cam_entry == debug_event ) {          // Choose specific event, for testing and debugging.
+        // if ( cam_entry == debug_event ) {          // Choose specific event, for testing and debugging.
+        if ( cam_entry > 9 && cam_entry < 12) {          // Testing multiple events (multiple alphas already tested)
 
             file_root->mkdir(Form("Run_%i_ev_%i", cam_run, cam_event));
             file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
@@ -241,7 +226,7 @@ int main(int argc, char**argv) {
             for ( int sc_i = 0; sc_i < nSc_red; sc_i++ ) {
 
                 cam_PID = false;
-                cout << "\t*Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n" << endl;
+                cout << "\n\t==> Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n" << endl;
 
                 // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //cam cut
                 // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
@@ -252,7 +237,9 @@ int main(int argc, char**argv) {
                     //----------- Build Analyser track  -----------//
 
                     Analyzer Track(Form("Track_run_%i_ev_%i", cam_run, cam_event),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
-
+                    
+                    addTracks(original_image, h_original, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Track_run_%i_ev_%i", cam_run, cam_event));
+                    
                     Track.SetWScal(wFac);
                     Track.SetNPIP(NPIP);
                     Track.ApplyThr();
@@ -264,9 +251,8 @@ int main(int argc, char**argv) {
                     Track.ImprCorrectAngle();
                     Track.BuildLineDirection();
 
-                    h_fullsize = Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_event%i_run%i", cam_run, cam_event));
                     points_cam = Track.GetLinePoints(matching_slices,"edges");
-                    print_BAT_CAM_match(h_fullsize, points_cam, "cam", "CAM Match");
+                    // addPoints_BAT_CAM(original_image, points_cam, "cam", "CAM Match"); //If you don't see them, it's because they are under
 
                     //----------- Get important track parameters  -----------//
 
@@ -309,9 +295,17 @@ int main(int argc, char**argv) {
                         .IP_X_cm = x_impact,
                         .IP_Y_cm = y_impact,
 
-                        .its_alpha = cam_PID
+                        .its_alpha = cam_PID,
+
+                        .track_cam = points_cam
                     });
+
+                    //----------- Cleanup ----------------- -----------//
+
+                    points_cam.clear();
+
                 } else cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
+
             }
         }
         sc_redpixID.resize(nSc); // Resize to avoid problem with vector sizes
@@ -319,7 +313,10 @@ int main(int argc, char**argv) {
     reco_data_cam->Close();
     
 
+
     /* *********************************************  Analysis PMT  *******************************************  */
+    
+    cout << "\n\n************   Analysis  PMT    ************\n\n" << endl;
 
     vector<AlphaTrackPMT> PMT_alphas;
     Int_t nentries_pmt = (Int_t)tree_pmt->GetEntries();
@@ -331,11 +328,13 @@ int main(int argc, char**argv) {
         shared_ptr<vector<double>> slow_waveform = make_shared<vector<double>>();
 
         // if ( pmt_event == debug_event && pmt_trigger == debug_trigger && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
+        // if ( pmt_event == debug_event && pmt_trigger == 0 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
         // if ( pmt_event == debug_event && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
-        if ( pmt_event == debug_event && pmt_trigger == 0 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
+        if ( pmt_event > 9 && pmt_event < 12 && pmt_sampling == 1024) {          // Testing multiple events (multiple alphas already tested)
 
             
-            if ( pmt_channel == 1) cout << "\n\t*PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
+            if ( pmt_channel == 1) cout << "\n\t==> PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
+            file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
 
             //-----------  Put branch information into vector for further analysis  --------------------------------------------//
 
@@ -405,7 +404,6 @@ int main(int argc, char**argv) {
 
             //----------- Make final waveform plot with all the information  ---------------------------------------------------//
 
-
             create_and_print_wf_graph_lines2(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
             time_fast_wf, fast_waveform,
             TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
@@ -415,32 +413,9 @@ int main(int argc, char**argv) {
 
             //----------- Calculation of all the final variables of interest  --------------------------------------------------//
            
-            if ( pmt_channel == 4 ) {                   // Perform actions only when I have the 4 waveforms
-                
-                cout << "\nPMT Track information: \n" << endl; 
+            if ( pmt_channel == 4 ) {                   
 
-
-                //----------- Calculate direction in Z, and respective score  ------------------------//
-
-                direction = 0, dir_score = 0;
-                getDirectionScore(skew_ratio, direction, dir_score, false);
-
-                if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
-                else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
-                else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
-            
-
-                //----------- Calculate travelled Z  ------------------------//
-
-                avg_travel_z = accumulate(travelled_Z.begin(), travelled_Z.end(), 0.0) / travelled_Z.size();
-                cout << "--> The average travelled Z (cm) is: " << avg_travel_z << endl;
-
-
-                //----------- Calculate Quadrant ---------------------------//
-                
-                getQuadrantPMT(integrals_wfs, quadrant_pmt);
-                cout << "--> The track is in the quadrant: " << quadrant_pmt << endl;
-
+                cout << "\n\n**PMT Track information: \n" << endl; 
 
                 //----------- Particle ID ---------------------------------//
 
@@ -448,32 +423,64 @@ int main(int argc, char**argv) {
                 getAlphaIdentification(TOT20, TOT30, pmt_PID_total, true);
                 cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
 
+                
+                if (pmt_PID_total) {
 
-                //----------- Run BAT routine ----------------------------//
+                    //----------- Calculate direction in Z, and respective score  ------------------------//
 
-                create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "input_for_bat.txt");
-                run_bat("input_for_bat.txt", "output_from_bat.txt");
-                read_bat("output_from_bat.txt",points_bat, true);
-                print_BAT_CAM_match(h_fullsize, points_bat, "bat", "BAT Match");
-
+                    direction = 0, dir_score = 0;
 
 
-                //----------- Collect all the relevant info for posterior analysis  -----------//
+                    if (!skew_ratio.empty()) {
+                        getDirectionScore(skew_ratio, direction, dir_score, false);
+                    } else {
+                        direction = 0; dir_score = 0;
+                        cout << "No skewness calculated. Direction is ambiguous." << endl;
+                    }
 
-                PMT_alphas.push_back({
-                    .run = pmt_run,
-                    .pic  = pmt_event,
-                    .trg = pmt_trigger,
+                    if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
+                    else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
+                    else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
 
-                    .dir = direction,
-                    .prob = (dir_score*100.),
-                    .trv_Z = avg_travel_z,
 
-                    .quad = quadrant_pmt,
+                    //----------- Calculate travelled Z  ------------------------//
 
-                    .its_alpha = pmt_PID_total
-                });
+                    avg_travel_z = accumulate(travelled_Z.begin(), travelled_Z.end(), 0.0) / travelled_Z.size();
+                    cout << "--> The average travelled Z (cm) is: " << avg_travel_z << endl;
 
+
+                    //----------- Calculate Quadrant ---------------------------//
+                    
+                    getQuadrantPMT(integrals_wfs, quadrant_pmt);
+                    cout << "--> The track is in the quadrant: " << quadrant_pmt << endl;
+
+
+                    //----------- Run BAT routine ----------------------------//
+
+                    create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "input_for_bat.txt");
+                    run_bat("input_for_bat.txt", "output_from_bat.txt");
+                    read_bat("output_from_bat.txt",points_bat, false);
+                    addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
+
+
+                    //----------- Collect all the relevant info for posterior analysis  -----------//
+
+                    PMT_alphas.push_back({
+                        .run = pmt_run,
+                        .pic  = pmt_event,
+                        .trg = pmt_trigger,
+
+                        .dir = direction,
+                        .prob = (dir_score*100.),
+                        .trv_Z = avg_travel_z,
+
+                        .quad = quadrant_pmt,
+
+                        .its_alpha = pmt_PID_total,
+
+                        .track_pmt = points_bat
+                    });
+                }
 
                 //----------- Clear vector used for the 4 waveforms  -----------//
 
@@ -485,13 +492,23 @@ int main(int argc, char**argv) {
                 travelled_Z.clear();
                 integrals_slices.clear();
                 points_bat.clear();
-                points_cam.clear();
             }
         }
     }
     reco_data_pmt->Close();
 
+    original_image->cd();
+    original_image->DrawClone();
+    // c_original->Write("Original_Image",TObject::kWriteDelete);
+    // delete c_original;
+
+
     /* **************************************  COMBINED ANALYSIS  ********************************************************************  */
+
+    cout << "\n\n************   COMBINED Analysis   ************\n\n" << endl;
+
+    /* -- Note: I'm doing PMT-PID association, and not using BAT as it is not needed when we have 1 alpha per pic at maximum.
+    Instead, we get the BAT information and then compare the distances between bat and real position, comparing automatic association  -- */
 
     /* ************* Combined information ********** */
 
@@ -504,10 +521,11 @@ int main(int argc, char**argv) {
     double pmt_direction;
     double pmt_direction_score;
     int cam_quad, pmt_quad;
-    // bool cam_PID, pmt_PID;
+    bool cam_ParticleID, pmt_ParticleID;
     double cam_energy, pmt_energy;
+    vector<pair<double,double>> distances;
 
-    TTree *tree_3D = new TTree("3D_Alpha_Tracks", "3D Alpha Tracks");
+    TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
     tree_3D->Branch("run", &run, "run/I");
     tree_3D->Branch("picture", &picture, "picture/I");
@@ -527,57 +545,79 @@ int main(int argc, char**argv) {
     tree_3D->Branch("pmt_direction_score", &pmt_direction_score, "pmt_direction_score/D");
     tree_3D->Branch("cam_quad", &cam_quad, "cam_quad/I");
     tree_3D->Branch("pmt_quad", &pmt_quad, "pmt_quad/I");
-    // tree_3D->Branch("cam_PID", &cam_PID, "cam_PID/O");
-    // tree_3D->Branch("pmt_PID", &pmt_PID, "pmt_PID/O");
+    tree_3D->Branch("cam_PID", &cam_ParticleID, "cam_PID/O");
+    tree_3D->Branch("pmt_PID", &pmt_ParticleID, "pmt_PID/O");
     tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
     tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
+    tree_3D->Branch("distances_pixels", &distances);
 
     for (const auto& cam : CAM_alphas) {
 
         for (const auto& pmt : PMT_alphas) {
         
-            if ( pmt.run == cam.run ) {
+            if ( pmt.run == cam.run && pmt.pic == cam.pic) {
 
-                if ( pmt.pic == cam.pic ) {
-                
-                    if (pmt.quad == cam.quad ) {        
+                if (pmt.quad == cam.quad ) {         //quad selection is too sensitive to alphas in the center    
+                    if ( pmt.its_alpha == true && cam.its_alpha == true) {
 
-                        if ( pmt.its_alpha == true && cam.its_alpha == true) {
+                        run = cam.run; picture = cam.pic; trigger = pmt.trg;
 
-                            cout << "\n# Matched alpha in quadrant: " << pmt.quad << "; in trigger: " << pmt.trg << "; with Alpha-PID = " << pmt.its_alpha << endl;
-                            
-                            //----------- Creating 3D alpha track information  -----------//
-
-                            IP_X = cam.IP_X_cm;
-                            IP_Y = cam.IP_Y_cm;               
-                            IP_Z = 25.0;                          // Absolute Z fixed.
-
-                            track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
-                            track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
-                            track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);
-
-                            Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
-
-                            full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
-
-                            cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
-                            cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
-                            cout << "--> Travelled XY: "    << cam.trv_XY   << endl;
-                            cout << "--> Angle XY (#phi): "        << cam.angle_XY << endl;
-                            cout << "--> Travelled Z: "     << pmt.trv_Z    << endl;
-                            cout << "--> Direction in Z: "  << pmt.dir      << " at " << abs(pmt.prob) << " score" << endl;
-                            cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
-                            cout << "--> 3D alpha length (cm): " << full_length  << endl;
-
-                            file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                            build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+                        cout << Form("\n\n ==> Matched alpha in run %i, event %i, trigger %i, quadrant %i, with Alpha-PID = %i", cam.run, cam.pic, pmt.trg, pmt.quad, pmt.its_alpha) << endl;
                         
-                            tree_3D->Fill();
+                        //----------- Creating 3D alpha track information  -----------//
 
-                        } else continue;
-                    } else continue;
-                } else continue;
-            } else continue;
+                        IP_X = cam.IP_X_cm;
+                        IP_Y = cam.IP_Y_cm;               
+                        IP_Z = 25.0;                          // Absolute Z fixed.
+
+                        track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
+                        track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
+                        track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
+
+                        Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
+                        XY_angle = cam.angle_XY;
+
+                        Z_length = pmt.trv_Z;
+                        XY_length = cam.trv_XY;
+                        full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
+
+                        pmt_direction = pmt.dir;
+                        pmt_direction_score = pmt.prob;
+
+                        cam_quad = cam.quad;
+                        pmt_quad = pmt.quad;
+
+                        cam_ParticleID = cam.its_alpha; pmt_ParticleID = pmt.its_alpha;
+
+                        cam_energy = 0; pmt_energy = 0; // Not used for now
+
+                        //----------- Verbose information  -----------//
+
+                        cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
+                        cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
+                        cout << "--> Travelled XY: "    << XY_length   << endl;
+                        cout << "--> Angle XY (#phi): "        << XY_angle << endl;
+                        cout << "--> Travelled Z: "     << Z_length    << endl;
+                        cout << "--> Direction in Z: "  << pmt_direction      << " at " << abs(pmt_direction_score) << " score" << endl;
+                        cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
+                        cout << "--> 3D alpha length (cm): " << full_length  << endl;
+
+                        file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
+                        build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+
+                        //-----------  Accuracy of BAT  -------------------------------//
+
+                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
+
+
+                        //-----------  Tree filling and variables cleaning  ----------//
+                    
+                        tree_3D->Fill();
+                        distances.clear();
+
+                    } else continue; // PID
+                } else continue; // quad
+            } else continue; //run & pic
         } //close for pmt
     } //close for cam
 
@@ -592,19 +632,15 @@ int main(int argc, char**argv) {
 }
 
 
-/*  ***************************************************************************************************************************  */
-/*  ***************************************************************************************************************************  */
-/*  ***************************************************************************************************************************  */
+/*  *****************************************************************************************************************************************************************************************************************  */
 
-
-// Function to calculate indices for clusters based on reduced pixels
-// nSc: number of superclusters
-// npix: total number of pixels
-// sc_redpixID: array of indices for the first reduced pixel in each cluster
-// nSc_red: number of processed superclusters (output)
-// B: begin indices for reduced pixels (output)
-// E: end indices for reduced pixels (output)
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E){
+    // Function to calculate indices for clusters based on reduced pixels
+    // nSc: n_superclusters; npix: total n_pixels
+    // sc_redpixID: array of indices for the first reduced pixel in each cluster
+    // nSc_red: number of processed superclusters (output)
+    // B: begin indices for reduced pixels (output);  E: end indices for reduced pixels (output)
+
     nSc_red=0;
     B.clear();
     E.clear();
@@ -634,151 +670,3 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
     sc_redpix_start.clear(); // Clear the temporary storage
 }
 
-
-void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
- double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
- int ru, int pi, int tr){
-
-    ///////////////////   For plotting purposes, Y and Z are swapped.
-
-    //-------  3D box with LIME's dimensions in cm  --------//
-
-    TCanvas *c_3D = new TCanvas("c_3D", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr), 700, 700); c_3D->cd();
-
-    TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);       //155, 36  
-    // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -1.5, 34.5, 1, 0, 50, 1, -1.5, 34.5);   //155, 36    
-    // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -0.9, 33.9, 1, 0, 50, 1, -0.9, 33.9);   //151, 34.8    
-    axis->SetStats(0);
-    axis->GetXaxis()->SetTitle("X");
-    axis->GetYaxis()->SetTitle("Z");
-    axis->GetZaxis()->SetTitle("Y");
-    axis->Draw(""); // Need to use "Copy" to visualize the plot and also save the canvas
-
-    //--------  Main 3D vector line  --------//
-
-    /*  // To create a monocolor simple line
-    double x[2] = {x0, x1};
-    double z[2] = {y0, y1};
-    double y[2] = {z0, z1};
-
-    TPolyLine3D *line = new TPolyLine3D(2, x, y, z);
-    line->SetLineColor(kAzure-5);
-    line->SetLineWidth(4);
-    line->Draw("same");
-    */
-
-    // Normalize the vector for the arrowhead calculation
-    double ux = (x1-x0);
-    double uy = (y1-y0);
-    double uz = (z1-z0);
-
-    // To create a color gradient in the track - THIS PART COULD / SHOULD BE ASSOCIATED TO THE LONGITUDINAL PROFILE (?)
-    const int numSegments = 45;
-    const int color_jumper = 5;
-
-    // Create arrays for the segment points
-    double x[numSegments + 1];
-    double y[numSegments + 1];
-    double z[numSegments + 1];
-
-    // Calculate the segment points and colors
-    for (int i = 0; i <= numSegments; ++i) {
-        double t = (double)i / numSegments;
-        x[i] = x0 + t * ux;
-        y[i] = y0 + t * uy;
-        z[i] = z0 + t * uz;
-    }
-
-    // Create and draw the segments
-    auto colorIndex = TColor::GetPalette();
-    for (int i = 0; i < numSegments; ++i) {
-        double segmentX[2] = {x[i], x[i+1]};
-        double segmentZ[2] = {y[i], y[i+1]};
-        double segmentY[2] = {z[i], z[i+1]};
-        
-        TPolyLine3D *segment = new TPolyLine3D(2, segmentX, segmentY, segmentZ);
-        
-        // Set color based on gradient factor
-        segment->SetLineColor(colorIndex.At(i*color_jumper));
-        segment->SetLineWidth(3);
-        segment->Draw();
-    }
-
-    //--------  Create arrow lines to make direction more clear  --------//
-
-    // Length of the arrowhead lines
-    // double arrowHeadLength = 0.025 * length;
-    double arrowHeadLength = 0.1;
-
-    double x2 = x1 - arrowHeadLength * (ux + uy);
-    double y2 = y1 - arrowHeadLength * (uy - ux);
-    double z2 = z1 - arrowHeadLength * uz;
-
-    double x3 = x1 - arrowHeadLength * (ux - uy);
-    double y3 = y1 - arrowHeadLength * (uy + ux);
-    double z3 = z1 - arrowHeadLength * uz;
-
-    // Calculate orthogonal arrowhead points
-    double x4 = x1 - arrowHeadLength * (ux + uz);
-    double y4 = y1 - arrowHeadLength * uy;
-    double z4 = z1 - arrowHeadLength * (uz - ux);
-
-    double x5 = x1 - arrowHeadLength * (ux - uz);
-    double y5 = y1 - arrowHeadLength * uy;
-    double z5 = z1 - arrowHeadLength * (uz + ux);
-
-    // Create arrays for the arrowhead lines
-    double arrowX1[2] = {x1, x2};
-    double arrowZ1[2] = {y1, y2};
-    double arrowY1[2] = {z1, z2};
-
-    double arrowX2[2] = {x1, x3};
-    double arrowZ2[2] = {y1, y3};
-    double arrowY2[2] = {z1, z3};
-
-    double arrowX3[2] = {x1, x4};
-    double arrowZ3[2] = {y1, y4};
-    double arrowY3[2] = {z1, z4};
-
-    double arrowX4[2] = {x1, x5};
-    double arrowZ4[2] = {y1, y5};
-    double arrowY4[2] = {z1, z5};
-
-    // Create the arrowhead lines
-    TPolyLine3D *arrowLine1 = new TPolyLine3D(2, arrowX1, arrowY1, arrowZ1);
-    arrowLine1->SetLineColor(colorIndex.At(numSegments*color_jumper));
-    arrowLine1->SetLineWidth(3);
-    arrowLine1->Draw("same");
-
-    TPolyLine3D *arrowLine2 = new TPolyLine3D(2, arrowX2, arrowY2, arrowZ2);
-    arrowLine2->SetLineColor(colorIndex.At(numSegments*color_jumper));
-    arrowLine2->SetLineWidth(3);
-    arrowLine2->Draw("same");
-
-    TPolyLine3D *arrowLine3 = new TPolyLine3D(2, arrowX3, arrowY3, arrowZ3);
-    arrowLine3->SetLineColor(colorIndex.At(numSegments*color_jumper));
-    arrowLine3->SetLineWidth(3);
-    arrowLine3->Draw("same");
-
-    TPolyLine3D *arrowLine4 = new TPolyLine3D(2, arrowX4, arrowY4, arrowZ4);
-    arrowLine4->SetLineColor(colorIndex.At(numSegments*color_jumper));
-    arrowLine4->SetLineWidth(3);
-    arrowLine4->Draw("same");
-
-    //--------  Create legend with other important information  --------//
-
-    TLegend* l = new TLegend(0.60, 0.6, 0.95, 0.9);
-    l->SetHeader("3D Alpha information", "L");
-    l->SetTextAlign(12); // Align text left-top (vertical center)
-    // l->SetMargin(0.05);  // Reduce margin to minimum
-    l->AddEntry((TObject*)0,Form("Travelled XY = %.2f cm",              l_xy), "p");
-    l->AddEntry((TObject*)0,Form("Angle XY (#phi) = %.2f #circ",        a_xy), "p");
-    l->AddEntry((TObject*)0,Form("Travelled Z = %.2f cm",               l_z), "p");
-    l->AddEntry((TObject*)0,Form("Direction in Z = %i at %.1f score",         d_z, abs(p_z)), "p");
-    l->AddEntry((TObject*)0,Form("Angle Z (#theta) = %.2f #circ",       a_z), "p");
-    l->AddEntry((TObject*)0,Form("3D alpha length (cm) = %.2f",   length), "p");
-    l->Draw("same");
-    c_3D->DrawClone();
-    c_3D->Write("3D vector",TObject::kWriteDelete);
-    delete c_3D;
-} 

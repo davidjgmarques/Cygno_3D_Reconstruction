@@ -166,7 +166,8 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
         
         if ( (TOT20[q] / TOT30[q]) >= 1 && (TOT20[q] / TOT30[q]) <= 2 ) count_id1++;
         
-        if ( TOT20[q] >= 80 ) count_id2++;
+        // if ( TOT20[q] >= 200 ) count_id2++;
+        if ( TOT20[q] >= 100 ) count_id2++;
     }
 
     if ( count_id1 == 4) pmt_PID1 = true;
