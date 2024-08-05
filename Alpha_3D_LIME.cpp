@@ -12,10 +12,8 @@
 #include "TLine.h"
 #include "TTree.h"
 
-#include "../Track_analyzer/Analyzer.h"   //Change the path to the correct one
-#include "./plotting_functions.h"
-#include "./waveform_analyser.h"
-#include "./bat_functions.h"
+#include "../Track_analyzer/Analyzer.h"   //** Change the path to the correct one
+#include "./include.h"
 
 using namespace std;
 
@@ -36,6 +34,15 @@ struct AlphaTrackCAM {
     bool its_alpha;
 
     vector<pair<double,double>> track_cam;
+
+    double energy;
+    double nhits;
+    double width;
+    double xmean;
+    double ymean;
+    double rms;
+    double tgausssigma;
+
 };
 
 struct AlphaTrackPMT {
@@ -45,7 +52,7 @@ struct AlphaTrackPMT {
     int trg;
 
     int dir;        // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
-    double prob;    // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
+    double prob;    
     double trv_Z;
     int quad;
 
@@ -53,6 +60,7 @@ struct AlphaTrackPMT {
 
     vector<pair<double,double>> track_pmt;
 
+    double energy;
 };
 
 int main(int argc, char**argv) {
@@ -64,87 +72,82 @@ int main(int argc, char**argv) {
     string filename_pmt = argv[ 2 ];
 
     string outputfile = argv[ 3 ]; 
-    TFile* file_root = new TFile(outputfile.c_str(),"recreate");
+    string final_out = "out/" + outputfile + ".root";
+    TFile* file_root = new TFile(final_out.c_str(),"recreate");
 
+    //for debugging and testing
     int debug_event = atof(argv[ 4 ]);
     // int debug_trigger = atof(argv[ 5 ]);
 
-    /* ****************************************  Definition of variables and graphs  ******************************************************************  */
+    /* ****************************************  Definition of variables   **************************************************************************  */
 
+    // -----------------  Detector / Physics constants  ----------------- //
+
+    const double drift_vel = 5.471; // cm/µs // electron drift velocity in LIME, He:CF4 60:40, 800 V/cm 
+    const double granularity = 0.0155; // cm/pixel 
+
+    // -----------------  Analyzer constants  ----------------- //
+    // For alphas (David)
+    
+    Int_t NPIP=2000; Float_t wFac=3.5;
+    
+    // For ER (original from Samuele)
+    // Int_t NPIP=80; Float_t wFac=2.5;
+
+    
+    // Cluster pixels reading
+    int nSc_red=0;
     vector<int> BeginScPix;
     vector<int> EndScPix;
-    int nSc_red=0;
 
-    vector<int> time_fast_wf(1024); // Create a vector with 1025 elements
-    vector<int> time_slow_wf(4000); // Create a vector with 1025 elements
+    // X axis for the waveforms
+    vector<int> time_fast_wf(1024); iota(time_fast_wf.begin(), time_fast_wf.end(), 0);
+    vector<int> time_slow_wf(4000); iota(time_slow_wf.begin(), time_slow_wf.end(), 0);
 
-    iota(time_fast_wf.begin(), time_fast_wf.end(), 0); // Fill the vector with values starting from 0
-    iota(time_slow_wf.begin(), time_slow_wf.end(), 0); // Fill the vector with values starting from 0
-
+    // Direction
     int direction; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
     double dir_score;
     bool verbose_dir_score = false;
 
+    //Waveform analysis
     double wf_integral;
     vector<double> integrals_wfs;
-
-    vector<double> skew_ratio;          // ** check how to calculate skewness. Useful to then connect with Bayes fit.
     double avg_skew;
-
+    vector<double> skew_ratio;          // ** check how to calculate skewness. Useful to then connect with Bayes fit.
     vector<pair<int,double>> wf_peaks;
-
-    double delta_z;
-    vector<double> travelled_Z;
-    double avg_travel_z;
-
-    // Variables for ToT
-    int TOT20_begin = 0, TOT20_end = 0;
-    double TOT20_div;
-
-    int TOT30_begin = 0, TOT30_end = 0;
-    double TOT30_div;
-    vector<double> TOT30;
-    vector<double> TOT20;
-
-    // vector<vector<double>> wfs(4);
-
-    bool pmt_PID_total;
-
-    // electron drift velocity in LIME, He:CF4 60:40, 800 V/cm 
-    const double drift_vel = 5.471; // cm/µs
-    
-    double TOT20_half_way;
-    int quadrant_pmt;
-
+    int matching_slices = 5;
     vector<vector<double>> integrals_slices;
 
+    // Travelled Z
+    double delta_z;
+    double avg_travel_z;
+    vector<double> travelled_Z;
+
+    // Variables for ToT
+    int TOT20_begin = 0, TOT20_end = 0; double TOT20_div; vector<double> TOT20;
+    int TOT30_begin = 0, TOT30_end = 0; double TOT30_div; vector<double> TOT30;
+
+    // PID
+    int quadrant_pmt;
+    int quadrant_cam;
+    bool pmt_PID_total;
+    bool cam_PID = false;
+
+    // BAT and CAM matching
     vector<pair<double,double>> points_bat;
     vector<pair<double,double>> points_cam;
+
+    // CAM variables
+    double x_impact, y_impact;
+    double xbar, ybar;
+    double angle_cam;
+
+    // PMT
+    double fitted_lum;
 
     // Eventually, if one wants to save the original image, but that would require creating a new canvas and histogram for each picture...
     TCanvas* original_image = new TCanvas("Original Image", "Original Image", 700, 700);
     TH2F* h_original = new TH2F("Original_Image", "Original_Image", 2304, 0, 2304, 2304, 0, 2304);
-    
-    // Number of slices to be used for the track matching (CAM <-> BAT)
-    int matching_slices = 5;
-
-
-    /* ************* CAM variables ********** */
-
-    // For alphas (David)
-    Int_t NPIP=2000;
-    Float_t wFac=3.5;
-    // For ER (original from Samuele)
-    // Int_t NPIP=80;
-    // Float_t wFac=2.5;
-
-    double x_impact, y_impact;
-    double xbar, ybar;
-    int quadrant_cam;
-    double angle_cam;
-    const double granularity = 0.0155; // cm/pixel 
-
-    bool cam_PID = false;
 
     /* ****************************************  Opening root recoed file -- CAMERA ******************************************************************  */
 
@@ -169,14 +172,13 @@ int main(int argc, char**argv) {
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
     UInt_t Nredpix=0;               tree_cam->SetBranchAddress("nRedpix",&Nredpix);
 
-    // vector<UInt_t> ScNpixels;       ScNpixels.reserve(nscmax);
-
     vector<float> sc_redpixID;      sc_redpixID.reserve(150000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
     vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
     vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
     // vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
     // vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
     vector<float> ZPix;             ZPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iz",       ZPix.data());  
+
 
     /* ****************************************  Opening root recoed file -- PMT ******************************************************************  */
 
@@ -212,7 +214,6 @@ int main(int argc, char**argv) {
     for (Int_t cam_entry = 0; cam_entry < nentries; cam_entry++) {
         
         tree_cam->GetEntry(cam_entry);
-        // cout << "Cam run: " << cam_run << "; event(pic): " << cam_event << "; nSc: " << nSc << endl;
 
         // if ( cam_entry == debug_event ) {          // Choose specific event, for testing and debugging.
         if ( cam_entry > 9 && cam_entry < 12) {          // Testing multiple events (multiple alphas already tested)
@@ -297,22 +298,29 @@ int main(int argc, char**argv) {
 
                         .its_alpha = cam_PID,
 
-                        .track_cam = points_cam
-                    });
+                        .track_cam = points_cam,
+
+                        .energy      = sc_integral[sc_i],
+                        .nhits       = sc_nhits[sc_i],
+                        .width       = sc_width[sc_i] * granularity,
+                        .xmean       = sc_xmean[sc_i] * granularity,
+                        .ymean       = sc_ymean[sc_i] * granularity,
+                        .rms         = sc_rms[sc_i],
+                        .tgausssigma = sc_tgausssigma[sc_i]
+
+                    });      
 
                     //----------- Cleanup ----------------- -----------//
 
                     points_cam.clear();
 
                 } else cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
-
             }
         }
         sc_redpixID.resize(nSc); // Resize to avoid problem with vector sizes
     }
     reco_data_cam->Close();
     
-
 
     /* *********************************************  Analysis PMT  *******************************************  */
     
@@ -457,9 +465,11 @@ int main(int argc, char**argv) {
 
                     //----------- Run BAT routine ----------------------------//
 
-                    create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "input_for_bat.txt");
-                    run_bat("input_for_bat.txt", "output_from_bat.txt");
-                    read_bat("output_from_bat.txt",points_bat, false);
+                    fitted_lum = 0;
+                    /* File naming a bit hardcoded here */
+                    create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
+                    run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
+                    read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
                     addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
 
 
@@ -478,7 +488,9 @@ int main(int argc, char**argv) {
 
                         .its_alpha = pmt_PID_total,
 
-                        .track_pmt = points_bat
+                        .track_pmt = points_bat,
+
+                        .energy = fitted_lum
                     });
                 }
 
@@ -512,24 +524,43 @@ int main(int argc, char**argv) {
 
     /* ************* Combined information ********** */
 
+    // General
     int run, picture, trigger;
+    
+    //3D track variables
     double IP_X, IP_Y, IP_Z;
     double track_end_X, track_end_Y, track_end_Z;
     double Z_angle, XY_angle;
     double Z_length, XY_length;
     double full_length;
+    
+    // Head-tail
     double pmt_direction;
     double pmt_direction_score;
+    
+    //Association
     int cam_quad, pmt_quad;
     bool cam_ParticleID, pmt_ParticleID;
-    double cam_energy, pmt_energy;
     vector<pair<double,double>> distances;
+
+    // Remaining variables
+    double pmt_energy;
+    double cam_energy;
+    double cam_nhits;
+    double cam_width;
+    double cam_xmean;
+    double cam_ymean;
+    double cam_rms;
+    double cam_tgausssigma;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
+    // General
     tree_3D->Branch("run", &run, "run/I");
     tree_3D->Branch("picture", &picture, "picture/I");
     tree_3D->Branch("trigger", &trigger, "trigger/I");
+
+    // 3D track variables
     tree_3D->Branch("IP_X", &IP_X, "IP_X/D");
     tree_3D->Branch("IP_Y", &IP_Y, "IP_Y/D");
     tree_3D->Branch("IP_Z", &IP_Z, "IP_Z/D");
@@ -541,15 +572,28 @@ int main(int argc, char**argv) {
     tree_3D->Branch("Z_length", &Z_length, "Z_length/D");
     tree_3D->Branch("XY_length", &XY_length, "XY_length/D");
     tree_3D->Branch("full_length", &full_length, "full_length/D");
+
+    // Head-tail
     tree_3D->Branch("pmt_direction", &pmt_direction, "pmt_direction/D");
     tree_3D->Branch("pmt_direction_score", &pmt_direction_score, "pmt_direction_score/D");
+
+    // Association
     tree_3D->Branch("cam_quad", &cam_quad, "cam_quad/I");
     tree_3D->Branch("pmt_quad", &pmt_quad, "pmt_quad/I");
-    tree_3D->Branch("cam_PID", &cam_ParticleID, "cam_PID/O");
-    tree_3D->Branch("pmt_PID", &pmt_ParticleID, "pmt_PID/O");
-    tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
+    tree_3D->Branch("cam_ParticleID", &cam_ParticleID, "cam_ParticleID/O");
+    tree_3D->Branch("pmt_ParticleID", &pmt_ParticleID, "pmt_ParticleID/O");
+    tree_3D->Branch("distances", &distances);
+
+    // Remaining variables
     tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
-    tree_3D->Branch("distances_pixels", &distances);
+    tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
+    tree_3D->Branch("cam_nhits", &cam_nhits, "cam_nhits/D");
+    tree_3D->Branch("cam_width", &cam_width, "cam_width/D");
+    tree_3D->Branch("cam_xmean", &cam_xmean, "cam_xmean/D");
+    tree_3D->Branch("cam_ymean", &cam_ymean, "cam_ymean/D");
+    tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
+    tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
+    
 
     for (const auto& cam : CAM_alphas) {
 
@@ -587,9 +631,13 @@ int main(int argc, char**argv) {
                         cam_quad = cam.quad;
                         pmt_quad = pmt.quad;
 
-                        cam_ParticleID = cam.its_alpha; pmt_ParticleID = pmt.its_alpha;
+                        cam_ParticleID = cam.its_alpha;
+                        pmt_ParticleID = pmt.its_alpha;
 
-                        cam_energy = 0; pmt_energy = 0; // Not used for now
+
+                        //-----------  Accuracy of BAT  -------------------------------//
+
+                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
 
                         //----------- Verbose information  -----------//
 
@@ -605,10 +653,16 @@ int main(int argc, char**argv) {
                         file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
                         build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
 
-                        //-----------  Accuracy of BAT  -------------------------------//
+                        //-----------  Variables for mixed analysis  -------------------------------//
 
-                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
-
+                        pmt_energy = pmt.energy;
+                        cam_energy = cam.energy;
+                        cam_nhits = cam.nhits;
+                        cam_width = cam.width;
+                        cam_xmean = cam.xmean;
+                        cam_ymean = cam.ymean;
+                        cam_rms = cam.rms;
+                        cam_tgausssigma = cam.tgausssigma;
 
                         //-----------  Tree filling and variables cleaning  ----------//
                     
