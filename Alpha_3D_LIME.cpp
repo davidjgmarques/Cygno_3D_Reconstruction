@@ -270,7 +270,7 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
 
                     Analyzer Track(Form("Track_run_%i_ev_%i", cam_run, cam_event),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
                     
-                    addTracks(original_image, h_original, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Track_run_%i_ev_%i", cam_run, cam_event));
+                    // addTracks(original_image, h_original, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Track_run_%i_ev_%i", cam_run, cam_event));
                     
                     Track.SetWScal(wFac);
                     Track.SetNPIP(NPIP);
@@ -501,7 +501,7 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                     create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
                     run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
                     read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
-                    addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
+//                     addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
 
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
@@ -540,8 +540,8 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     }
     reco_data_pmt->Close();
 
-    original_image->cd();
-    original_image->DrawClone();
+    // original_image->cd();
+    // original_image->DrawClone();
     // c_original->Write("Original_Image",TObject::kWriteDelete);
     // delete c_original;
 
