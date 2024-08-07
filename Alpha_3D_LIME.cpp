@@ -90,15 +90,15 @@ int main(int argc, char**argv) {
 
     std::cout << std::boolalpha; // Enable boolalpha
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
-
+    
     string filename_cam = argv[ 2 ];
 
     string filename_pmt = argv[ 3 ];
 
-    string outputfile = argv[ 4 ]; 
+    string outputfile = argv[ 4 ];
     string final_out; 
     if (mode == "full") final_out = "out/" + outputfile + ".root";
-if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
+    if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     TFile* file_root = new TFile(final_out.c_str(),"recreate");
 
     //for debugging and testing
@@ -242,15 +242,19 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     cout << "\n\n************   Analysis  CAMERA    ************\n\n" << endl;
     vector<AlphaTrackCAM> CAM_alphas;
     Int_t nentries = (Int_t)tree_cam->GetEntries();
-    for (Int_t cam_entry = 0; cam_entry < nentries; cam_entry++) {
+    for (Int_t cam_entry = 0; cam_entry < nentries; ++cam_entry) {
         
         tree_cam->GetEntry(cam_entry);
 
+       
         // if ( cam_entry == debug_event ) {          // Choose specific event, for testing and debugging.
-        if ( cam_entry > 9 && cam_entry < 12) {          // Testing multiple events (multiple alphas already tested)
+        // if ( cam_entry > 9 && cam_entry < 12) {          // Testing multiple events (multiple alphas already tested)
+        if ( true ) {          // Full mode
 
-            file_root->mkdir(Form("Run_%i_ev_%i", cam_run, cam_event));
-            file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
+            if (mode == "debug" && cam_event != debug_event) continue;
+
+            if(save_everything) file_root->mkdir(Form("Run_%i_ev_%i", cam_run, cam_event));
+            if(save_everything) file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
 
             sc_redpixID.clear();
             ScIndicesElem(nSc, Nredpix, sc_redpixID.data(), nSc_red, BeginScPix, EndScPix);
@@ -283,9 +287,10 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                     Track.ImprCorrectAngle();
                     Track.BuildLineDirection();
 
-                    points_cam = Track.GetLinePoints(matching_slices,"edges");
-                    // addPoints_BAT_CAM(original_image, points_cam, "cam", "CAM Match"); //If you don't see them, it's because they are under
-
+                    if (bat_mode) {
+                        points_cam = Track.GetLinePoints(matching_slices,"edges");
+                        // addPoints_BAT_CAM(original_image, points_cam, "cam", "CAM Match"); //If you don't see them, it's because they are under
+                    }
                     //----------- Get important track parameters  -----------//
 
                     angle_cam = Track.GetDir()/TMath::Pi()*180.;
@@ -308,10 +313,13 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                     cout << "--> Angle: " << angle_cam << " degrees." << endl;
                     cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
 
-                    Track.PlotandSavetoFileCOLZ(Form("Track_ev%i_run%i", cam_run, cam_event));          // Saves TH2D, colz, in root file
-                    Track.PlotandSavetoFileDirectionalFull("X-Y Analyser");                             // Saves the directionality plots all together, in root file
-
-                    printTrackProfiles( Track.FillProfile(false), Track.FillProfile(true), "Track profiles");
+                    
+                    // Track.PlotandSavetoFileCOLZ(Form("Track_ev%i_run%i", cam_run, cam_event));           
+                    if(save_everything) {
+                        Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_ev%i_run%i", cam_run, cam_event));     
+                        Track.PlotandSavetoFileDirectionalFull("X-Y Analyser");                            
+                        printTrackProfiles( Track.FillProfile(false), Track.FillProfile(true), "Track profiles");
+                    }
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -343,7 +351,7 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
 
                     //----------- Cleanup ----------------- -----------//
 
-                    points_cam.clear();
+                    if (bat_mode) points_cam.clear();
 
                 } else cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
             }
@@ -366,14 +374,12 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
         shared_ptr<vector<double>> fast_waveform = make_shared<vector<double>>();
         shared_ptr<vector<double>> slow_waveform = make_shared<vector<double>>();
 
-        // if ( pmt_event == debug_event && pmt_trigger == debug_trigger && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
-        // if ( pmt_event == debug_event && pmt_trigger == 0 && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
-        // if ( pmt_event == debug_event && pmt_sampling == 1024) {         // Choose specific event, for testing and debugging.
-        if ( pmt_event > 9 && pmt_event < 12 && pmt_sampling == 1024) {          // Testing multiple events (multiple alphas already tested)
+        if ( pmt_sampling == 1024) {          // FULL ANALYSIS mode
 
+            if (mode == "debug" && pmt_event != debug_event) continue;
             
             if ( pmt_channel == 1) cout << "\n\t==> PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
-            file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
+            if (save_everything) file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
 
             //-----------  Put branch information into vector for further analysis  --------------------------------------------//
 
@@ -416,7 +422,7 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
             //-----------  Getting information for BAT  -------------------------------------------------------------------------//
 
 
-            sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
+            if(bat_mode) sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
             
 
             //-----------  Getting travelled Z  -----------//
@@ -443,11 +449,13 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
 
             //----------- Make final waveform plot with all the information  ---------------------------------------------------//
 
-            create_and_print_wf_graph_lines2(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
-            time_fast_wf, fast_waveform,
-            TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
-            TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
-            wf_peaks);
+            if(save_everything){ 
+                create_and_print_wf_graph_lines2(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
+                time_fast_wf, fast_waveform,
+                TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
+                TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
+                wf_peaks);
+            }
 
 
             //----------- Calculation of all the final variables of interest  --------------------------------------------------//
@@ -497,12 +505,13 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                     //----------- Run BAT routine ----------------------------//
 
                     fitted_lum = 0;
-                    /* File naming a bit hardcoded here */
-                    create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
-                    run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
-                    read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
-//                     addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
-
+                    if (bat_mode) {
+                        /* File naming a bit hardcoded here */
+                        create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
+                        run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
+                        read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
+                        // addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
+                    }
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -668,8 +677,8 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
 
                         //-----------  Accuracy of BAT  -------------------------------//
 
-                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
-
+                        if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
+                        
                         //----------- Verbose information  -----------//
 
                         cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
@@ -681,9 +690,10 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                         cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
                         cout << "--> 3D alpha length (cm): " << full_length  << endl;
 
-                        file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                        build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
-
+                        if(save_everything){
+                            file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
+                            build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+                        }
                         //-----------  Variables for mixed analysis  -------------------------------//
 
                         pmt_energy = pmt.energy;
@@ -700,11 +710,12 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
                         tree_3D->Fill();
                         distances.clear();
 
-                    } else continue; // PID
+                    } else continue;
                 } else continue; // quad
-            } else continue; //run & pic
-        } //close for pmt
-    } //close for cam
+            } else continue;
+        } // close for pmt
+    } // close for cam
+
 
     file_root->cd();
     tree_3D->Write();
@@ -716,7 +727,7 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     deleteNonAlphaDirectories(final_out.c_str());
 
     cout << "**Finished**" << endl;
-    myapp->Run();
+    if(!batch_mode) myapp->Run();
 
     return 0;
 }
