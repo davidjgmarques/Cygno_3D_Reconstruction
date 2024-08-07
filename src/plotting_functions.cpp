@@ -8,6 +8,7 @@
 #include "TH2F.h"
 #include "TH3F.h"
 #include "TPolyLine3D.h"
+#include "TRandom3.h"
 
 #include "plotting_functions.h"
 
@@ -172,17 +173,6 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
 
     //--------  Main 3D vector line  --------//
 
-    /*  // To create a monocolor simple line
-    double x[2] = {x0, x1};
-    double z[2] = {y0, y1};
-    double y[2] = {z0, z1};
-
-    TPolyLine3D *line = new TPolyLine3D(2, x, y, z);
-    line->SetLineColor(kAzure-5);
-    line->SetLineWidth(4);
-    line->Draw("same");
-    */
-
     // Normalize the vector for the arrowhead calculation
     double ux = (x1-x0);
     double uy = (y1-y0);
@@ -281,6 +271,37 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     arrowLine4->SetLineWidth(3);
     arrowLine4->Draw("same");
 
+    //--------  Electron cloud   ---------------------------------------//
+    /*
+
+    // Generate Gaussian points around the main line
+    // Generate Gaussian points around the main line and fill a TH3 histogram
+    const int numGaussianPoints = 10000;
+    double sigma = 0.2;  // Standard deviation for the Gaussian distribution
+
+    TRandom3 rand;
+    TH3F *densityHist = new TH3F("densityHist", "Density Histogram", 100, 0, 36, 100, 0, 50, 100, 0, 36);
+
+    for (int i = 0; i <= numSegments; ++i) {
+        for (int j = 0; j < numGaussianPoints / numSegments; ++j) {
+            double dx = rand.Gaus(0, sigma);
+            double dy = rand.Gaus(0, sigma);
+            double dz = rand.Gaus(0, sigma);
+
+            double px = x[i] + dx;
+            double py = y[i] + dy;
+            double pz = z[i] + dz;
+
+            densityHist->Fill(px, py, pz);  // Fill the histogram with the point
+        }
+    }
+
+    densityHist->GetXaxis()->SetTitle("X");
+    densityHist->GetYaxis()->SetTitle("Z");
+    densityHist->GetZaxis()->SetTitle("Y");
+    densityHist->Draw("SAME BOX2Z");  // Draw the histogram with color representation
+    */
+
     //--------  Create legend with other important information  --------//
 
     TLegend* l = new TLegend(0.60, 0.6, 0.95, 0.9);
@@ -295,7 +316,7 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     l->AddEntry((TObject*)0,Form("3D alpha length (cm) = %.2f",   length), "p");
     l->Draw("same");
     c_3D->DrawClone();
-    c_3D->Write("3D vector");
+    c_3D->Write("3D_vector");
     delete c_3D;
 } 
 
