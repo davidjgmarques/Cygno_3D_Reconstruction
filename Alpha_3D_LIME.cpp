@@ -169,8 +169,8 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     double fitted_lum;
 
     // Eventually, if one wants to save the original image, but that would require creating a new canvas and histogram for each picture...
-    TCanvas* original_image = new TCanvas("Original Image", "Original Image", 700, 700);
-    TH2F* h_original = new TH2F("Original_Image", "Original_Image", 2304, 0, 2304, 2304, 0, 2304);
+    // TCanvas* original_image = new TCanvas("Original Image", "Original Image", 700, 700);
+    // TH2F* h_original = new TH2F("Original_Image", "Original_Image", 2304, 0, 2304, 2304, 0, 2304);
 
     /* ****************************************  Opening root recoed file -- CAMERA ******************************************************************  */
 
