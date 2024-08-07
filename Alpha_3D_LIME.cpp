@@ -64,19 +64,42 @@ struct AlphaTrackPMT {
 };
 
 int main(int argc, char**argv) {
+
+    /* ****************************************  Running options   **************************************************************************  */
+
+    bool save_everything = false;    //opposite of saving *only* the alpha-tree
+    bool bat_mode = false;
+
+    string mode = argv[ 1 ]; // debug or full
+    bool batch_mode;
+    if (mode == "full") batch_mode = true;
+    if (mode == "debug") batch_mode = false, save_everything = true;
+
+    /* ****************************************  Inputs and outputs   **************************************************************************  */
+
+    if(batch_mode) gROOT->SetBatch(kTRUE);
+
+    if (argc < 4) {
+        cout << "Usage: ./Alpha_3D_LIME mode <CAMERA reco file> <PMT reco file> <output file> " << endl;
+        return 1;
+    }
+
     std::cout << std::boolalpha; // Enable boolalpha
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
 
-    string filename_cam = argv[ 1 ];
+    string filename_cam = argv[ 2 ];
 
-    string filename_pmt = argv[ 2 ];
+    string filename_pmt = argv[ 3 ];
 
-    string outputfile = argv[ 3 ]; 
-    string final_out = "out/" + outputfile + ".root";
+    string outputfile = argv[ 4 ]; 
+    string final_out; 
+    if (mode == "full") final_out = "out/" + outputfile + ".root";
+if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     TFile* file_root = new TFile(final_out.c_str(),"recreate");
 
     //for debugging and testing
-    int debug_event = atof(argv[ 4 ]);
+    int debug_event = 0;
+    if (mode == "debug") debug_event = atof(argv[ 5 ]);
     // int debug_trigger = atof(argv[ 5 ]);
 
     /* ****************************************  Definition of variables   **************************************************************************  */
