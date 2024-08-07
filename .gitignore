@@ -36,3 +36,4 @@ Thumbs.db
 # Ignore data files
 data/
 out/
+bat_files/
