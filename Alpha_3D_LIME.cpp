@@ -22,6 +22,7 @@ using namespace std;
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll = false);
+std::string exec(const char* cmd); 
 
 struct AlphaTrackCAM {
 
@@ -634,6 +635,14 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
     
+    // Capture the current Git commit hash
+    string git_commit_hash = exec("git rev-parse HEAD");
+
+    // Create a branch in the tree to store the commit hash
+    char git_commit_hash_cstr[41]; // Git commit hash is 40 characters long
+    strncpy(git_commit_hash_cstr, git_commit_hash.c_str(), 40);
+    git_commit_hash_cstr[40] = '\0'; // Ensure null-termination
+    tree_3D->Branch("git_commit_hash", git_commit_hash_cstr, "git_commit_hash/C");
 
     for (const auto& cam : CAM_alphas) {
 
@@ -818,4 +827,17 @@ void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
             }
         }
     }
+}
+
+std::string exec(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
 }
