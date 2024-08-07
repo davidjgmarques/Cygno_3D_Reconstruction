@@ -195,12 +195,16 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
     UInt_t Nredpix=0;               tree_cam->SetBranchAddress("nRedpix",&Nredpix);
 
-    vector<float> sc_redpixID;      sc_redpixID.reserve(150000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
-    vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
-    vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
-    // vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
-    // vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
-    vector<float> ZPix;             ZPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iz",       ZPix.data());  
+    // --> Reserve even higher than the expected number of pixels to avoid problems with the vector size
+    vector<float> sc_redpixID;      sc_redpixID.reserve(1500000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
+    // Run 3
+    // vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
+    // vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
+    // Run 4
+    vector<int> XPix;               XPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
+    vector<int> YPix;               YPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
+    
+    vector<float> ZPix;             ZPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_iz",       ZPix.data());  
 
 
     /* ****************************************  Opening root recoed file -- PMT ******************************************************************  */
