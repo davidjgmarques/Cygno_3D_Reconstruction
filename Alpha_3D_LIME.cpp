@@ -11,6 +11,9 @@
 #include "TApplication.h"
 #include "TLine.h"
 #include "TTree.h"
+#include "TROOT.h"
+
+#include "TKey.h"
 
 #include "../Track_analyzer/Analyzer.h"   //** Change the path to the correct one
 #include "./include.h"
@@ -18,6 +21,7 @@
 using namespace std;
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
+void deleteNonAlphaDirectories(const char* filename, bool deleteAll = false);
 
 struct AlphaTrackCAM {
 
@@ -706,6 +710,11 @@ if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
     tree_3D->Write();
 
     file_root->Close();
+
+    // In order to avoid saving non-alphas. Can only be done after the alpha PID is done. 
+    // Not sure if actually improves the file size, but improves readability.
+    deleteNonAlphaDirectories(final_out.c_str());
+
     cout << "**Finished**" << endl;
     myapp->Run();
 
@@ -751,3 +760,51 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
     sc_redpix_start.clear(); // Clear the temporary storage
 }
 
+void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
+
+    cout << "Deleting non-alpha events from root file..." << endl;
+
+    // Open the ROOT file
+    TFile* file_root = TFile::Open(filename, "UPDATE");
+    if (!file_root || file_root->IsZombie()) {
+        cout << "Error opening file: " << filename << endl;
+        return;
+    }
+
+    // Get the list of directories
+    TIter next(file_root->GetListOfKeys());
+    TKey* key;
+    while ((key = (TKey*)next())) {
+        // Check if the key is a directory
+        if (strcmp(key->GetClassName(), "TDirectoryFile") != 0) continue;
+
+        // Get the directory
+        TDirectory* dir = (TDirectory*)file_root->Get(key->GetName());
+        if (!dir) continue;
+
+        // If deleteAll is true, delete the directory
+        if (deleteAll) {
+            file_root->cd();
+            file_root->rmdir(dir->GetName());
+            continue;
+        } else {
+
+            // Check if the directory contains "3D_vector"
+            bool contains3DVector = false;
+            TIter nextObj(dir->GetListOfKeys());
+            TKey* objKey;
+            while ((objKey = (TKey*)nextObj())) {
+                if (string(objKey->GetName()) == "3D_vector") {
+                    contains3DVector = true;
+                    break;
+                }
+            }
+
+            // If the directory doesn't contain "3D_vector", delete it
+            if (!contains3DVector) {
+                file_root->cd();
+                file_root->rmdir(dir->GetName());
+            }
+        }
+    }
+}
