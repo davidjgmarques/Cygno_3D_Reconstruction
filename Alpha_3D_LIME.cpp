@@ -28,8 +28,8 @@ int main(int argc, char**argv) {
 
     /* ****************************************  Running options   **************************************************************************  */
 
-    bool save_everything = false;    //opposite of saving *only* the alpha-tree
-    bool bat_mode = false;
+    bool save_everything = true;    //opposite of saving *only* the alpha-tree
+    bool bat_mode = true;
 
     string mode = argv[ 1 ]; // debug or full
     bool batch_mode;
@@ -131,10 +131,6 @@ int main(int argc, char**argv) {
     // PMT
     double fitted_lum;
 
-    // Eventually, if one wants to save the original image, but that would require creating a new canvas and histogram for each picture...
-    // TCanvas* original_image = new TCanvas("Original Image", "Original Image", 700, 700);
-    // TH2F* h_original = new TH2F("Original_Image", "Original_Image", 2304, 0, 2304, 2304, 0, 2304);
-
     /* ****************************************  Opening root recoed file -- CAMERA ******************************************************************  */
 
     TFile *reco_data_cam = TFile::Open(filename_cam.c_str());
@@ -233,8 +229,6 @@ int main(int argc, char**argv) {
 
                     Analyzer Track(Form("Track_run_%i_ev_%i", cam_run, cam_event),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
                     
-                    // addTracks(original_image, h_original, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Track_run_%i_ev_%i", cam_run, cam_event));
-                    
                     Track.SetWScal(wFac);
                     Track.SetNPIP(NPIP);
                     Track.ApplyThr();
@@ -248,7 +242,6 @@ int main(int argc, char**argv) {
 
                     if (bat_mode) {
                         points_cam = Track.GetLinePoints(matching_slices,"edges");
-                        // addPoints_BAT_CAM(original_image, points_cam, "cam", "CAM Match"); //If you don't see them, it's because they are under
                     }
                     //----------- Get important track parameters  -----------//
 
@@ -473,7 +466,6 @@ int main(int argc, char**argv) {
                         create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
                         run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
                         read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
-                        // addPoints_BAT_CAM(original_image, points_bat, "bat", "BAT Match");
                     }
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
@@ -515,12 +507,6 @@ int main(int argc, char**argv) {
         }
     }
     reco_data_pmt->Close();
-
-    // original_image->cd();
-    // original_image->DrawClone();
-    // c_original->Write("Original_Image",TObject::kWriteDelete);
-    // delete c_original;
-
 
     /* **************************************  COMBINED ANALYSIS  ********************************************************************  */
 
@@ -652,7 +638,7 @@ int main(int argc, char**argv) {
 
                         //-----------  Accuracy of BAT  -------------------------------//
 
-                        if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
+                        if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, true);
                         
                         //----------- Verbose information  -----------//
 
