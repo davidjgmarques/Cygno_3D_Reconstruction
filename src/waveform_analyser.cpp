@@ -250,7 +250,7 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
     if ( count_id2 == 4) pmt_PID2 = true;
 
     double average_num_peaks = peaks_ed/4.;
-    if ( average_num_peaks < 4) pmt_PID3 = true;
+    if ( average_num_peaks < 3) pmt_PID3 = true;
 
     
     if ( pmt_PID1 && pmt_PID2 && pmt_PID3 ) pmt_PID_total = true;

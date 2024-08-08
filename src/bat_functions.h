@@ -1,7 +1,7 @@
 #ifndef BAT_FUNCS_H
 #define BAT_FUNCS_H
 
-// struct bayesd_data;
+#include <string>
 
 std::vector<std::string> trim_name(const std::string &full_name, char delimiter);
 

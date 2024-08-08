@@ -5,5 +5,7 @@
 #include "./src/plotting_functions.h"
 #include "./src/waveform_analyser.h"
 #include "./src/bat_functions.h"
+#include "./src/cl_trg_association.h"
+
 
 #endif // INCLUDE_H
