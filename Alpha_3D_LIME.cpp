@@ -278,6 +278,7 @@ int main(int argc, char**argv) {
                     CAM_alphas.push_back({
                         .run = cam_run,
                         .pic  = cam_event,
+                        .cluster = sc_i,
 
                         .angle_XY = angle_cam,
                         .trv_XY = sc_length[sc_i] * granularity,
@@ -535,6 +536,7 @@ int main(int argc, char**argv) {
     int cam_quad, pmt_quad;
     bool cam_ParticleID, pmt_ParticleID;
     vector<pair<double,double>> distances;
+    vector<tuple<double, size_t, size_t>> small_dist_assoc;
 
     // Remaining variables
     double pmt_energy;
@@ -596,9 +598,154 @@ int main(int argc, char**argv) {
     git_commit_hash_cstr[40] = '\0'; // Ensure null-termination
     tree_3D->Branch("git_commit_hash", git_commit_hash_cstr, "git_commit_hash/C");
 
-    for (const auto& cam : CAM_alphas) {
+///////////////////////////////////
 
-        for (const auto& pmt : PMT_alphas) {
+    // To make the BAT association, I need to re-arrange some data because I'm saving the alphas individually as "entries"
+    // So I now re-group the events per picture number in a map so that I can ASSOCIATE trigger and clusters in the same event.  
+
+    // Map where the key will be the {run,pic} number and the value the alpha(s) in that pic.
+    std::map<RunPicKey, std::vector<decltype(CAM_alphas)::value_type>> cam_map;
+    std::map<RunPicKey, std::vector<decltype(PMT_alphas)::value_type>> pmt_map;
+
+    // Group alphas by run number and picture number
+    for (const auto& cam : CAM_alphas) {
+        RunPicKey key = {cam.run, cam.pic};
+        cam_map[key].push_back(cam);
+    }
+    for (const auto& pmt : PMT_alphas) {
+        RunPicKey key = {pmt.run, pmt.pic};
+        pmt_map[key].push_back(pmt);
+    }
+
+
+    for (const auto& cam_entry : cam_map) {
+
+        const RunPicKey& key = cam_entry.first;
+        const auto& cam_entries = cam_entry.second;
+        const auto& pmt_entries = pmt_map[key]; // Corresponding PMT entries for the current run number and picture number
+
+        small_dist_assoc.clear();
+
+        one_to_one_association(small_dist_assoc, pmt_entries, cam_entries, false);
+
+        // Print the associations
+        // Associate pmt and cam tracks by the smallest distances
+
+        cout << "Associations for run " << key.run << ", picture " << key.pic << endl;
+        cout << "Number of total possibilities: " << small_dist_assoc.size() << endl;
+        cout << "Number of CAM alphas: " << cam_entries.size() << endl;
+        cout << "Number of PMT alphas: " << pmt_entries.size() << endl;
+
+        for (size_t i = 0; i < small_dist_assoc.size(); ++i) {
+            double dd = std::get<0>(small_dist_assoc[i]);
+            size_t cam_idx = std::get<1>(small_dist_assoc[i]);
+            size_t pmt_idx = std::get<2>(small_dist_assoc[i]);
+            const auto& cam = cam_entries[cam_idx];
+            const auto& pmt = pmt_entries[pmt_idx];
+            cout << "Possible combinations: " << endl;
+            cout << " -> CAM cluster # = " << cam_idx << "; PMT trigger" << pmt.trg << "; Distance: " << dd << endl;
+        }
+
+        int n_assoc = min(cam_entries.size(), pmt_entries.size());
+        cout << "\nWe'll perform > " << n_assoc << " < associations." << endl;
+        for (size_t i = 0; i < n_assoc; ++i) {
+            
+            double dd = std::get<0>(small_dist_assoc[i]);
+            size_t cam_idx = std::get<1>(small_dist_assoc[i]);
+            size_t pmt_idx = std::get<2>(small_dist_assoc[i]);
+            
+            const auto& cam = cam_entries[cam_idx];
+            const auto& pmt = pmt_entries[pmt_idx];
+            
+            cout << endl;
+            cout << "-------------------------------------" << endl;
+            cout << "Associated:\n -> CAM alpha # = " << cam_idx << ", cluster = " << cam.cluster << "\n -> PMT alpha # = " << pmt_idx << ", trigger " << pmt.trg << endl;
+            cout << "Distance: " << dd << endl;
+            cout << "-------------------------------------" << endl;
+
+
+            run = cam.run; picture = cam.pic; trigger = pmt.trg;
+            cout << Form("\n\n ==> Matched alpha in run %i, event %i, trigger %i, quadrant %i, with Alpha-PID = %i", cam.run, cam.pic, pmt.trg, pmt.quad, pmt.its_alpha) << endl;
+            
+            //----------- Creating 3D alpha track information  -----------//
+
+            IP_X = cam.IP_X_cm;
+            IP_Y = cam.IP_Y_cm;               
+            IP_Z = 25.0;                          // Absolute Z fixed.
+
+            track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
+            track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
+            track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
+
+            Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
+            XY_angle = cam.angle_XY;
+
+            Z_length = pmt.trv_Z;
+            XY_length = cam.trv_XY;
+            full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
+
+            pmt_direction = pmt.dir;
+            pmt_direction_score = pmt.prob;
+
+            cam_quad = cam.quad;
+            pmt_quad = pmt.quad;
+
+            cam_ParticleID = cam.its_alpha;
+            pmt_ParticleID = pmt.its_alpha;
+
+
+            //-----------  Accuracy of BAT  -------------------------------//
+
+            if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
+            
+            //----------- Verbose information  -----------//
+
+            cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
+            cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
+            cout << "--> Travelled XY: "    << XY_length   << endl;
+            cout << "--> Angle XY (#phi): "        << XY_angle << endl;
+            cout << "--> Travelled Z: "     << Z_length    << endl;
+            cout << "--> Direction in Z: "  << pmt_direction      << " at " << abs(pmt_direction_score) << " score" << endl;
+            cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
+            cout << "--> 3D alpha length (cm): " << full_length  << endl;
+
+            if(save_everything){
+                file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
+                Points_BAT_CAM(pmt.track_pmt, cam.track_cam, "BAT_CAM_association_points");
+                build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+            }
+            //-----------  Variables for mixed analysis  -------------------------------//
+
+            pmt_energy = pmt.energy;
+            cam_energy = cam.energy;
+            cam_nhits = cam.nhits;
+            cam_width = cam.width;
+            cam_xmean = cam.xmean;
+            cam_ymean = cam.ymean;
+            cam_rms = cam.rms;
+            cam_tgausssigma = cam.tgausssigma;
+
+            //-----------  Tree filling and variables cleaning  ----------//
+        
+            tree_3D->Fill();
+            distances.clear();
+
+        }
+
+    }
+
+    /*
+    // for (const auto& cam : CAM_alphas) {
+    // for (size_t i = 0; i < CAM_alphas.size(); ++i) {
+    //     const auto& cam = CAM_alphas[i];
+    //     const auto& next_cam = CAM_alphas[i + 1];
+
+
+
+        // for (const auto& pmt : PMT_alphas) {
+        // for (size_t j = 0; j < PMT_alphas.size(); ++j) {
+        //     const auto& pmt = PMT_alphas[i];
+        //     const auto& next_pmt = PMT_alphas[i + 1];
         
             if ( pmt.run == cam.run && pmt.pic == cam.pic) {
 
@@ -676,6 +823,7 @@ int main(int argc, char**argv) {
             } else continue;
         } // close for pmt
     } // close for cam
+    */
 
 
     file_root->cd();
