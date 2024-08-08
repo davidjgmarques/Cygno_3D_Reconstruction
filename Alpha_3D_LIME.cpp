@@ -24,52 +24,6 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll = false);
 std::string exec(const char* cmd); 
 
-struct AlphaTrackCAM {
-
-    int run;
-    int pic;
-
-    double angle_XY; 
-    double trv_XY;
-    int quad;
-
-    double IP_X_cm;
-    double IP_Y_cm;
-
-    bool its_alpha;
-
-    vector<pair<double,double>> track_cam;
-
-    double energy;
-    double nhits;
-    double width;
-    double xmean;
-    double ymean;
-    double rms;
-    double tgausssigma;
-
-};
-
-struct AlphaTrackPMT {
-
-    int run;
-    int pic;
-    int trg;
-
-    int dir;        // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
-    double prob;    
-    double trv_Z;
-    int quad;
-
-    bool its_alpha;
-
-    vector<pair<double,double>> track_pmt;
-
-    double energy;
-
-    int num_peaks;
-};
-
 int main(int argc, char**argv) {
 
     /* ****************************************  Running options   **************************************************************************  */
