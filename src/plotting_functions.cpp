@@ -105,32 +105,45 @@ void printTrackProfiles ( TH1D *h1, TH1D *h2, std::string title) {
 
 }
 
-void addPoints_BAT_CAM( TCanvas *canvas, std::vector<std::pair<double,double>> points, std::string mode, std::string title) {
+void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
     
-    canvas->cd();
-    // image->Draw("COLZ");
+    TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 600);
+    cpoints->cd();
 
-    for (const auto& point : points) {
+    // Create a dummy histogram to set the axis ranges and titles
+    TH2F *dummyHist = new TH2F("dummyHist", title.c_str(), 1, 0, 2304, 1, 0, 2304);
+    gStyle->SetOptStat(0);  // Disable statistics box
+    dummyHist->Draw();
 
+    TLegend *legend = new TLegend();
+
+    for (size_t i = 0; i < batPoints.size(); i++) {
+        const auto& point = batPoints[i];
         TMarker* marker = new TMarker(point.first, point.second, 0);
-
-        if (mode == "bat") {
-            marker->SetMarkerStyle(29);
-            marker->SetMarkerColor(kRed);
-        } 
-        else if (mode == "cam") {
-            marker->SetMarkerStyle(34);
-            marker->SetMarkerColor(kBlack);
-        }
-
+        marker->SetMarkerStyle(29);
+        marker->SetMarkerColor(kRed);
         marker->SetMarkerSize(2);
         marker->Draw("SAME");
-        gPad->RedrawAxis();
+        if (i == 0) legend->AddEntry(marker, "PMT", "p");
     }
 
-    // canvas->DrawClone();
-    // cmatch->Write(title.c_str(),TObject::kWriteDelete);
-    // delete cmatch;
+    for (size_t i = 0; i < camPoints.size(); i++) {
+        const auto& point = camPoints[i];
+        TMarker* marker = new TMarker(point.first, point.second, 0);
+        marker->SetMarkerStyle(34);
+        marker->SetMarkerColor(kBlack);
+        marker->SetMarkerSize(2);
+        marker->Draw("SAME");
+        if (i == 0) legend->AddEntry(marker, "CAM", "p");
+    }
+
+    legend->Draw("SAME");
+
+    cpoints->DrawClone();
+    cpoints->Write(title.c_str());
+    delete cpoints;
+    delete dummyHist; // Clean up the dummy histogram
+
 }
 
 void addTracks(TCanvas *image, TH2F* histo, TH2F* track, int fminx, int fminy, std::string nometh2) {

@@ -5,7 +5,7 @@ void create_and_print_wf_graph_lines3 (std::string filename, std::vector<int> ti
 void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, std::vector<TMarker*> markers_cr, std::vector<TMarker*> markers_ed);
 
 
-void addPoints_BAT_CAM( TCanvas *image, std::vector<std::pair<double,double>> points, std::string mode, std::string title);
+void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title);
 
 void printTrackProfiles ( TH1D *h1, TH1D *h2, std::string title);
 
