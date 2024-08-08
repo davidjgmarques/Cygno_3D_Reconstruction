@@ -66,6 +66,8 @@ struct AlphaTrackPMT {
     vector<pair<double,double>> track_pmt;
 
     double energy;
+
+    int num_peaks;
 };
 
 int main(int argc, char**argv) {
@@ -143,6 +145,8 @@ int main(int argc, char**argv) {
     double avg_skew;
     vector<double> skew_ratio;          // ** check how to calculate skewness. Useful to then connect with Bayes fit.
     vector<pair<int,double>> wf_peaks;
+    vector<pair<int,double>> wf_peaks_energy_dep;
+    int wf_Npeaks_ed = 0;
     int matching_slices = 5;
     vector<vector<double>> integrals_slices;
 
@@ -447,17 +451,21 @@ int main(int argc, char**argv) {
             getSkewness_BraggPeak(fast_waveform, time_fast_wf, TOT20_begin, TOT20_end, 
             max_value_a, max_value_t, skew_ratio, wf_peaks);
 
+            wf_peaks_energy_dep.clear();
+            findPeaks(fast_waveform, 50 , wf_peaks_energy_dep);
+            wf_Npeaks_ed += wf_peaks_energy_dep.size();
+
 
             //----------- Make final waveform plot with all the information  ---------------------------------------------------//
 
             if(save_everything){ 
-                create_and_print_wf_graph_lines2(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
+
+                create_and_print_wf_graph_lines3(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
                 time_fast_wf, fast_waveform,
                 TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
                 TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
-                wf_peaks);
+                wf_peaks, wf_peaks_energy_dep);
             }
-
 
             //----------- Calculation of all the final variables of interest  --------------------------------------------------//
            
@@ -468,7 +476,7 @@ int main(int argc, char**argv) {
                 //----------- Particle ID ---------------------------------//
 
                 pmt_PID_total = false;
-                getAlphaIdentification(TOT20, TOT30, pmt_PID_total, true);
+                getAlphaIdentification(TOT20, TOT30, wf_Npeaks_ed, pmt_PID_total, true);
                 cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
 
                 
@@ -531,7 +539,9 @@ int main(int argc, char**argv) {
 
                         .track_pmt = points_bat,
 
-                        .energy = fitted_lum
+                        .energy = fitted_lum,
+
+                        .num_peaks = wf_Npeaks_ed 
                     });
                 }
 
@@ -542,9 +552,11 @@ int main(int argc, char**argv) {
                 skew_ratio.clear();                
                 integrals_wfs.clear();                
                 wf_peaks.clear();                
+                wf_peaks_energy_dep.clear();                
                 travelled_Z.clear();
                 integrals_slices.clear();
                 points_bat.clear();
+                wf_Npeaks_ed = 0;
             }
         }
     }

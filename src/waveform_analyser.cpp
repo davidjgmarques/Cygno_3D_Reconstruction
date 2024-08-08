@@ -5,6 +5,11 @@
 #include <iostream>
 #include <algorithm>
 
+#include "TSpectrum.h"
+#include "TH1.h"
+#include "TStyle.h"
+#include "TCanvas.h"
+
 #include "waveform_analyser.h"
 
 void movingAverageFilter(std::shared_ptr<std::vector<double>>& input_wf, int windowSize) {
@@ -122,6 +127,75 @@ void getSkewness_BraggPeak (std::shared_ptr<std::vector<double>> input_wf, std::
     peaks.push_back(peak2);
 }
 
+// void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>> &peaks2) {
+//     int peak_count = 0;
+//     int n = input_wf->size();
+
+//     double left_min;
+//     double right_min;
+//     double peak_prominence;
+
+//     for (int i = 200; i < n - 1; ++i) {
+//         // Check if the current point is a peak
+//         if ((*input_wf)[i] > (*input_wf)[i - 1] && (*input_wf)[i] > (*input_wf)[i + 1]) {
+//             // Check if the peak meets the prominence criteria
+//             left_min = (*input_wf)[i - 1];
+//             right_min = (*input_wf)[i + 1];
+//             peak_prominence = (*input_wf)[i] - std::max(left_min, right_min);
+
+//             if (peak_prominence >= prominence * (*input_wf)[i]) {
+//                 peaks2.emplace_back(i, (*input_wf)[i]);
+//                 peak_count++;
+//             }
+//         }
+//     }
+// }
+
+void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence_percentage, std::vector<std::pair<int, double>>& peaks2, bool verbose) {
+    
+    int n = input_wf->size();
+    TSpectrum spectrum;
+    double sigma = 20; // Width of the peaks
+    // int window_size = 20; // Window size to search for local minima
+    int window_size = 50; // Window size to search for local minima
+
+    // Create a histogram from the input waveform
+    TH1D h("h", "Waveform", n, 0, n);
+    for (int i = 0; i < n; ++i) {
+        h.SetBinContent(i + 1, (*input_wf)[i]);
+    }
+
+    // Peak search - https://root.cern.ch/doc/master/classTSpectrum.html#a5f8b7b208f813670259b51a8bcdcbfc5 
+    int nPeaks = spectrum.Search(&h, sigma, "nobackground nodraw", 0.05);
+
+    // Get the positions and amplitudes of the peaks
+    double* xPeaks = spectrum.GetPositionX();
+    double* yPeaks = spectrum.GetPositionY();
+
+    for (int i = 0; i < nPeaks; ++i) {
+        int index = static_cast<int>(xPeaks[i]);
+        double amplitude = yPeaks[i];
+
+        // Calculate the prominence of the peak using a window-based approach
+        int left_index = std::max(0, index - window_size);
+        int right_index = std::min(n - 1, index + window_size);
+
+        double left_min = *std::min_element(input_wf->begin() + left_index, input_wf->begin() + index);
+        double right_min = *std::min_element(input_wf->begin() + index + 1, input_wf->begin() + right_index + 1);
+
+        double peakProminence = amplitude - std::max(left_min, right_min);
+        double prominence_threshold = amplitude * (prominence_percentage / 100.0);
+
+        // Check if the peak prominence meets the threshold
+        if (peakProminence >= prominence_threshold) {
+            peaks2.emplace_back(index, amplitude);
+            if (verbose) {
+                std::cout << "Peak found at index: " << index << ", amplitude: " << amplitude << ", prominence: " << peakProminence << std::endl;
+            }
+        }
+    }
+}
+
 void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_score, bool verbose) {
 
     auto    max_skew_it     = std::max_element(skew_ratio.begin(), skew_ratio.end(), [](double a, double b) { return abs(a) < abs(b);});
@@ -157,24 +231,30 @@ void getQuadrantPMT( std::vector<double>& integrals, int &quadrant_pmt) {
     quadrant_pmt = index + 1;
 }
 
-void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, bool &pmt_PID_total, bool verbose ) {
+void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, const int & peaks_ed, bool &pmt_PID_total, bool verbose ) {
 
-    bool pmt_PID1 = false,  pmt_PID2 = false;
+    bool pmt_PID1 = false,  pmt_PID2 = false,   pmt_PID3 = false;
     int count_id1 = 0,      count_id2 = 0;
 
     for (int q = 0; q < TOT20.size(); ++q) {
         
+        // Check ratios between TOT20 and TOT30
         if ( (TOT20[q] / TOT30[q]) >= 1 && (TOT20[q] / TOT30[q]) <= 2 ) count_id1++;
-        
+
+        // Check if the TOT20 is greater than 200 (to remove Fe-like events)       
         // if ( TOT20[q] >= 200 ) count_id2++;
         if ( TOT20[q] >= 100 ) count_id2++;
     }
 
     if ( count_id1 == 4) pmt_PID1 = true;
     if ( count_id2 == 4) pmt_PID2 = true;
+
+    double average_num_peaks = peaks_ed/4.;
+    if ( average_num_peaks < 4) pmt_PID3 = true;
+
     
-    if ( pmt_PID1 && pmt_PID2)  pmt_PID_total = true;
-    else                        pmt_PID_total = false;
+    if ( pmt_PID1 && pmt_PID2 && pmt_PID3 ) pmt_PID_total = true;
+    else                                    pmt_PID_total = false;
 
     if (verbose) {
 
@@ -184,6 +264,10 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
 
         std::cout << "--> The TOT20 lengths were: "; 
         for (const auto &val : TOT20) std::cout << val << " * ";
+        std::cout << std::endl;
+
+        std::cout << "--> The average number of peaks per waveform was: "; 
+        std::cout << average_num_peaks;
         std::cout << std::endl;
     }
 }

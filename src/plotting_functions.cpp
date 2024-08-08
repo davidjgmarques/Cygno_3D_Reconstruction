@@ -12,26 +12,35 @@
 
 #include "plotting_functions.h"
 
-void create_and_print_wf_graph_lines2 (std::string filename, std::vector<int> time, std::shared_ptr<std::vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, std::vector<std::pair<int,double>> peaks) {
+void create_and_print_wf_graph_lines3 (std::string filename, std::vector<int> time, std::shared_ptr<std::vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, 
+    std::vector<std::pair<int,double>> peaks_crown,  std::vector<std::pair<int,double>> peaks_energy_dep) {
 
     TGraph *gWaveform = new TGraph();
     std::string newname = filename + "";
-
+    
     TLine * line1 = new TLine(start1,level1,end1,level1);
     TLine * line2 = new TLine(start2,level2,end2,level2);
 
-    TMarker *marker1 = new TMarker(peaks[0].first, peaks[0].second, 43); // Point (6, 36) with style 20
-    TMarker *marker2 = new TMarker(peaks[1].first, peaks[1].second, 43); // Point (6, 36) with style 20
+    std::vector<TMarker*> markers_crown;
+    for (const auto& peak : peaks_crown) {
+        TMarker* marker1 = new TMarker(peak.first, peak.second, 43);
+        markers_crown.push_back(marker1);
+    }
+
+    std::vector<TMarker*> markers_energy_dep;
+    for (const auto& peak : peaks_energy_dep) {
+        TMarker* marker2 = new TMarker(peak.first, peak.second, 43);
+        markers_energy_dep.push_back(marker2);
+    }
 
     for (int k = 0; k < time.size(); k++){
-
         gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
     }
-    print_graph_lines2(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, marker1, marker2);
-    
+
+    print_graph_lines3(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, markers_crown, markers_energy_dep);
 }
 
-void print_graph_lines2 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2){
+void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, std::vector<TMarker*> markers_cr, std::vector<TMarker*> markers_ed){
 
     TCanvas *c = new TCanvas("","", 800, 600);
     c->cd();
@@ -58,17 +67,21 @@ void print_graph_lines2 (TGraph *graph, std::string title, std::string x_axis, s
     l2->SetLineStyle(9);
     l2->Draw("same");
 
-    p1->SetMarkerColor(kOrange); 
-    p2->SetMarkerColor(kOrange); 
-    p1->SetMarkerStyle(23);
-    p2->SetMarkerStyle(23);
-    p1->SetMarkerSize(1.5);
-    p2->SetMarkerSize(1.5);
-    p1->Draw("same");
-    p2->Draw("same");
+    for (const auto & marker1 : markers_cr) {
+        marker1->SetMarkerColor(kOrange+10); 
+        marker1->SetMarkerStyle(23);
+        marker1->SetMarkerSize(1.5);
+        marker1->Draw("same");
+    }
+
+    for (const auto & marker2 : markers_ed) {
+        marker2->SetMarkerColor(kOrange); 
+        marker2->SetMarkerStyle(23);
+        marker2->SetMarkerSize(1.5);
+        marker2->Draw("same");
+    }
 
     c->SetName(title.c_str());
-    // c->Write(title.c_str(),TObject::kWriteDelete);
     c->Write(title.c_str());
 }
 

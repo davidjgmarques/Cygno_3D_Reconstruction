@@ -1,8 +1,9 @@
 #ifndef FUNCTIONS_H
 #define FUNCTIONS_H
 
-void create_and_print_wf_graph_lines2 (std::string filename, std::vector<int> time, std::shared_ptr<std::vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, std::vector<std::pair<int,double>> peaks);
-void print_graph_lines2 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, TMarker *p1, TMarker *p2);
+void create_and_print_wf_graph_lines3 (std::string filename, std::vector<int> time, std::shared_ptr<std::vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2,  std::vector<std::pair<int,double>> peaks_crown,  std::vector<std::pair<int,double>> peaks_energy_dep);
+void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, std::vector<TMarker*> markers_cr, std::vector<TMarker*> markers_ed);
+
 
 void addPoints_BAT_CAM( TCanvas *image, std::vector<std::pair<double,double>> points, std::string mode, std::string title);
 
