@@ -21,7 +21,7 @@ void getSkewness_BraggPeak (std::shared_ptr<std::vector<double>> input_wf, std::
 
 void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_score, bool verbose);
 
-void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30,  const int & peaks_ed, bool &pmt_PID_total, bool verbose = true);
+void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30,  const double & peaks_ed, bool &pmt_PID_total, bool verbose = true);
 
 void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence_percentage, std::vector<std::pair<int, double>>& peaks2, bool verbose = false);
 

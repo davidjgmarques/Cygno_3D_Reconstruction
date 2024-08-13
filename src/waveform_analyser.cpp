@@ -231,7 +231,7 @@ void getQuadrantPMT( std::vector<double>& integrals, int &quadrant_pmt) {
     quadrant_pmt = index + 1;
 }
 
-void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, const int & peaks_ed, bool &pmt_PID_total, bool verbose ) {
+void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, const double & peaks_ed, bool &pmt_PID_total, bool verbose ) {
 
     bool pmt_PID1 = false,  pmt_PID2 = false,   pmt_PID3 = false;
     int count_id1 = 0,      count_id2 = 0;
@@ -243,7 +243,7 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
 
         // Check if the TOT20 is greater than 200 (to remove Fe-like events)       
         // if ( TOT20[q] >= 200 ) count_id2++;
-        if ( TOT20[q] >= 100 ) count_id2++;
+        if ( TOT20[q] >= 70 ) count_id2++;  //100 ->80->70
     }
 
     if ( count_id1 == 4) pmt_PID1 = true;
