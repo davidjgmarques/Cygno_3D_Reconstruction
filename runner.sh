@@ -16,7 +16,7 @@ for (( run=$START_RUN; run<=$END_RUN; run++ )); do
   
   # Check if the input file exists
   if [ -f "$INPUT_FILE" ]; then
-    OUTPUT_FILE="out3D_${run}"
+    OUTPUT_FILE="bat_match_only_clusters/out3D_${run}"
     echo "Processing: $INPUT_FILE -> $OUTPUT_FILE"
     # ./alpha_3d.out full "$INPUT_FILE" "$INPUT_FILE" "$OUTPUT_FILE" || true
     ./alpha_3d.out full "$INPUT_FILE" "$INPUT_FILE" "$OUTPUT_FILE"
