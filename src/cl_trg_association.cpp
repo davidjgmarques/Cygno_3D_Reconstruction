@@ -35,3 +35,17 @@ void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dis
 
     std::sort(dists.begin(), dists.end());
 }
+
+bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt_run, int pmt_event) {
+
+    bool found = false;
+    for (const auto &cam_alpha : CAM_alphas) {
+
+        if (cam_alpha.run == pmt_run && cam_alpha.pic == pmt_event) {
+            found = true;
+            break;
+        }
+    }
+
+    return found;    
+}
