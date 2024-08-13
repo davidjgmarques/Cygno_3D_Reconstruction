@@ -49,3 +49,53 @@ bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt
 
     return found;    
 }
+
+void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
+
+    std::cout << "Deleting non-alpha events from root file..." << std::endl;
+
+    // Open the ROOT file
+    TFile* file_root = TFile::Open(filename, "UPDATE");
+    if (!file_root || file_root->IsZombie()) {
+        std::cout << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    // Get the list of directories
+    TIter next(file_root->GetListOfKeys());
+    TKey* key;
+    while ((key = (TKey*)next())) {
+        // Check if the key is a directory
+        if (strcmp(key->GetClassName(), "TDirectoryFile") != 0) continue;
+
+        // Get the directory
+        TDirectory* dir = (TDirectory*)file_root->Get(key->GetName());
+        if (!dir) continue;
+
+        // If deleteAll is true, delete the directory
+        if (deleteAll) {
+            file_root->cd();
+            file_root->rmdir(dir->GetName());
+            continue;
+        } else {
+
+            // Check if the directory contains "3D_vector"
+            bool contains3DVector = false;
+            TIter nextObj(dir->GetListOfKeys());
+            TKey* objKey;
+            while ((objKey = (TKey*)nextObj())) {
+                std::string objName = objKey->GetName();
+                if (objName.find("3D_vector") != std::string::npos) {
+                    contains3DVector = true;
+                    break;
+                }
+            }
+
+            // If the directory doesn't contain "3D_vector", delete it
+            if (!contains3DVector) {
+                file_root->cd();
+                file_root->rmdir(dir->GetName());
+            }
+        }
+    }
+}

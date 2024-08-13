@@ -63,4 +63,9 @@ struct RunPicKey {
 
 void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dists, const std::vector<AlphaTrackPMT>& pmt_entries, const std::vector<AlphaTrackCAM>& cam_entries, bool verbose);
 
+bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt_run, int pmt_event);
+
+void deleteNonAlphaDirectories(const char* filename, bool deleteAll);
+
+
 #endif // CL_TRG_ASSOCIATION_H
