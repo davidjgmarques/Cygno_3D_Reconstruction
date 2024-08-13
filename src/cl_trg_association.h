@@ -29,6 +29,8 @@ struct AlphaTrackCAM {
     double rms;
     double tgausssigma;
 
+    double fitSig;
+
 };
 
 struct AlphaTrackPMT {
@@ -48,7 +50,7 @@ struct AlphaTrackPMT {
 
     double energy;
 
-    int num_peaks;
+    double num_peaks;
 };
 
 // This structure is later useful to group the alpha by {run,event}

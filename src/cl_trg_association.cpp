@@ -3,6 +3,9 @@
 #include <tuple>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
+#include <TFile.h>
+#include <TKey.h>
 
 #include "cl_trg_association.h"
 #include "bat_functions.h"
