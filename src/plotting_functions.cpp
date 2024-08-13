@@ -193,15 +193,15 @@ void addTracks(TCanvas *image, TH2F* histo, TH2F* track, int fminx, int fminy, s
 
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
  double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
- int ru, int pi, int tr){
+ int ru, int pi, int tr, bool cloud, double sigma){
 
     ///////////////////   For plotting purposes, Y and Z are swapped.
 
     //-------  3D box with LIME's dimensions in cm  --------//
 
-    TCanvas *c_3D = new TCanvas("c_3D", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr), 700, 700); c_3D->cd();
+    TCanvas *c_3D = new TCanvas(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), 700, 700); c_3D->cd();
 
-    TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);       //155, 36  
+    TH3F *axis = new TH3F(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);       //155, 36  
     // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -1.5, 34.5, 1, 0, 50, 1, -1.5, 34.5);   //155, 36    
     // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -0.9, 33.9, 1, 0, 50, 1, -0.9, 33.9);   //151, 34.8    
     axis->SetStats(0);
@@ -314,22 +314,22 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     /*
 
     // Generate Gaussian points around the main line
-    // Generate Gaussian points around the main line and fill a TH3 histogram
     const int numGaussianPoints = 10000;
-    double sigma = 0.2;  // Standard deviation for the Gaussian distribution
+    double gaus_sigma = sigma;  // Standard deviation for the Gaussian distribution
 
     TRandom3 rand;
-    TH3F *densityHist = new TH3F("densityHist", "Density Histogram", 100, 0, 36, 100, 0, 50, 100, 0, 36);
+    int nbins = 100;
+    TH3F *densityHist = new TH3F(Form("electroncloud_run_%i_pic_%i_trig_%i", ru, pi, tr),Form("electroncloud_run_%i_pic_%i_trig_%i", ru, pi, tr), nbins, 0, 36, nbins, 0, 50, nbins, 0, 36);
 
     for (int i = 0; i <= numSegments; ++i) {
         for (int j = 0; j < numGaussianPoints / numSegments; ++j) {
-            double dx = rand.Gaus(0, sigma);
-            double dy = rand.Gaus(0, sigma);
-            double dz = rand.Gaus(0, sigma);
+            double dx = rand.Gaus(0, gaus_sigma);
+            double dy = rand.Gaus(0, gaus_sigma);
+            double dz = rand.Gaus(0, gaus_sigma);
 
             double px = x[i] + dx;
-            double py = y[i] + dy;
-            double pz = z[i] + dz;
+            double pz = y[i] + dy;
+            double py = z[i] + dz;
 
             densityHist->Fill(px, py, pz);  // Fill the histogram with the point
         }
@@ -341,6 +341,37 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     densityHist->Draw("SAME BOX2Z");  // Draw the histogram with color representation
     */
 
+    //--------  Electron cloud   ---------------------------------------//
+
+    if (cloud) {
+
+        // Create and draw the points
+        colorIndex = TColor::GetPalette();
+        TRandom3 rand;
+        const int numGaussianPoints = 2000;
+        double gaus_sigma = sigma;  // Standard deviation for the Gaussian distribution
+
+        for (int i = 0; i <= numSegments; ++i) {
+            for (int j = 0; j < numGaussianPoints / numSegments; ++j) {
+                double dx = rand.Gaus(0, gaus_sigma);
+                double dy = rand.Gaus(0, gaus_sigma);
+                double dz = rand.Gaus(0, gaus_sigma);
+
+                double px = x[i] + dx;
+                double pz = y[i] + dy;
+                double py = z[i] + dz;
+
+                TPolyMarker3D *point = new TPolyMarker3D(1);
+                point->SetPoint(0, px, py, pz);
+
+                // Set color based on gradient factor
+                point->SetMarkerColor(colorIndex.At(i * color_jumper));
+                point->SetMarkerStyle(20);  // Set marker style (e.g., 20 for a dot)
+                point->SetMarkerSize(0.5);  // Set marker size
+                point->Draw("same");
+            }
+        }
+    }
     //--------  Create legend with other important information  --------//
 
     TLegend* l = new TLegend(0.60, 0.6, 0.95, 0.9);
@@ -350,12 +381,12 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     l->AddEntry((TObject*)0,Form("Travelled XY = %.2f cm",              l_xy), "p");
     l->AddEntry((TObject*)0,Form("Angle XY (#phi) = %.2f #circ",        a_xy), "p");
     l->AddEntry((TObject*)0,Form("Travelled Z = %.2f cm",               l_z), "p");
-    l->AddEntry((TObject*)0,Form("Direction in Z = %i at %.1f score",         d_z, abs(p_z)), "p");
+    l->AddEntry((TObject*)0,Form("Direction in Z = %i at %.2f score",   d_z, p_z), "p");
     l->AddEntry((TObject*)0,Form("Angle Z (#theta) = %.2f #circ",       a_z), "p");
     l->AddEntry((TObject*)0,Form("3D alpha length (cm) = %.2f",   length), "p");
     l->Draw("same");
     c_3D->DrawClone();
-    c_3D->Write("3D_vector");
+    c_3D->Write();
     delete c_3D;
 } 
 
