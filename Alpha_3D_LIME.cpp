@@ -12,6 +12,7 @@
 #include "TLine.h"
 #include "TTree.h"
 #include "TROOT.h"
+#include "TFitResult.h"
 
 #include "TKey.h"
 
@@ -21,15 +22,15 @@
 using namespace std;
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
-void deleteNonAlphaDirectories(const char* filename, bool deleteAll = false);
+void deleteNonAlphaDirectories(const char *filename, bool deleteAll = false);
 std::string exec(const char* cmd); 
 
 int main(int argc, char**argv) {
+    auto start = std::chrono::high_resolution_clock::now();
 
     /* ****************************************  Running options   **************************************************************************  */
 
-    bool save_everything = true;    //opposite of saving *only* the alpha-tree
-    bool bat_mode = true;
+    bool save_everything = false;    //opposite of saving *only* the alpha-tree
 
     string mode = argv[ 1 ]; // debug or full
     bool batch_mode;
@@ -71,8 +72,8 @@ int main(int argc, char**argv) {
     const double granularity = 0.0155; // cm/pixel 
 
     // -----------------  Analyzer constants  ----------------- //
+
     // For alphas (David)
-    
     Int_t NPIP=2000; Float_t wFac=3.5;
     
     // For ER (original from Samuele)
@@ -92,7 +93,7 @@ int main(int argc, char**argv) {
     int direction; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
     double dir_score;
     bool verbose_dir_score = false;
-
+    
     //Waveform analysis
     double wf_integral;
     vector<double> integrals_wfs;
@@ -100,7 +101,7 @@ int main(int argc, char**argv) {
     vector<double> skew_ratio;          // ** check how to calculate skewness. Useful to then connect with Bayes fit.
     vector<pair<int,double>> wf_peaks;
     vector<pair<int,double>> wf_peaks_energy_dep;
-    int wf_Npeaks_ed = 0;
+    double wf_Npeaks_ed = 0;
     int matching_slices = 5;
     vector<vector<double>> integrals_slices;
 
@@ -128,6 +129,10 @@ int main(int argc, char**argv) {
     double xbar, ybar;
     double angle_cam;
 
+    // Profiles
+    double fitAmp, fitMean, fitSigma, fitConst;
+    double fitAmpError, fitMeanError, fitSigmaError, fitConstError;
+
     // PMT
     double fitted_lum;
 
@@ -149,6 +154,8 @@ int main(int argc, char**argv) {
     vector<float> sc_width;       sc_width.reserve(150000);       tree_cam->SetBranchAddress("sc_width",      sc_width.data());
     vector<float> sc_xmean;       sc_xmean.reserve(150000);       tree_cam->SetBranchAddress("sc_xmean",      sc_xmean.data());  
     vector<float> sc_ymean;       sc_ymean.reserve(150000);       tree_cam->SetBranchAddress("sc_ymean",      sc_ymean.data());  
+    vector<float> sc_xmin;        sc_xmin.reserve(150000);        tree_cam->SetBranchAddress("sc_xmin",       sc_xmin.data());  
+    vector<float> sc_ymin;        sc_ymin.reserve(150000);        tree_cam->SetBranchAddress("sc_ymin",       sc_ymin.data());  
     vector<float> sc_nhits;       sc_nhits.reserve(150000);       tree_cam->SetBranchAddress("sc_nhits",      sc_nhits.data());  
 
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
@@ -193,77 +200,79 @@ int main(int argc, char**argv) {
     file_root->cd();
 
     /* **********************************************  Analysis  CAMERA  ********************************************** */
-
+    
     cout << "\n\n************   Analysis  CAMERA    ************\n\n" << endl;
+
     vector<AlphaTrackCAM> CAM_alphas;
     Int_t nentries = (Int_t)tree_cam->GetEntries();
     for (Int_t cam_entry = 0; cam_entry < nentries; ++cam_entry) {
         
         tree_cam->GetEntry(cam_entry);
 
-       
-        // if ( cam_entry == debug_event ) {          // Choose specific event, for testing and debugging.
-        // if ( cam_entry > 9 && cam_entry < 12) {          // Testing multiple events (multiple alphas already tested)
-        if ( true ) {          // Full mode
+        if (mode == "debug" && cam_event != debug_event) continue;
 
-            if (mode == "debug" && cam_event != debug_event) continue;
+        sc_redpixID.clear();
+        ScIndicesElem(nSc, Nredpix, sc_redpixID.data(), nSc_red, BeginScPix, EndScPix);
 
-            if(save_everything) file_root->mkdir(Form("Run_%i_ev_%i", cam_run, cam_event));
-            if(save_everything) file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
+        for ( int sc_i = 0; sc_i < nSc_red; sc_i++ ) {
 
-            sc_redpixID.clear();
-            ScIndicesElem(nSc, Nredpix, sc_redpixID.data(), nSc_red, BeginScPix, EndScPix);
+            cam_PID = false;
+            cout << "\n\n\t==> Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n\n" << endl;
 
-            for ( int sc_i = 0; sc_i < nSc_red; sc_i++ ) {
+            // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //cam cut
+            // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
+            if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
+            // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
+            // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 10 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
 
-                cam_PID = false;
-                cout << "\n\t==> Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n" << endl;
+                if (save_everything) {
+                    TString folderName = Form("Run_%i_ev_%i", cam_run, cam_event);
+                    if (!file_root->GetDirectory(folderName)) file_root->mkdir(folderName);
+                    file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
+                }
 
-                // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //cam cut
-                // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
-                if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
-                    
-                    cam_PID = true;
+                cam_PID = true;
 
-                    //----------- Build Analyser track  -----------//
+                //----------- Build Analyser track  -----------//
 
-                    Analyzer Track(Form("Track_run_%i_ev_%i", cam_run, cam_event),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
-                    
-                    Track.SetWScal(wFac);
-                    Track.SetNPIP(NPIP);
-                    Track.ApplyThr();
-                    // Track.RemoveNoise(75);
-                    Track.RemoveNoise(100);
-                    Track.ImpactPoint(Form("Track_event%i_run%i", cam_run, cam_event));
-                    Track.ScaledTrack(Form("Track_rebinned_event%i_run%i", cam_run, cam_event));
-                    Track.Direction();
-                    Track.ImprCorrectAngle();
-                    Track.BuildLineDirection();
+                Analyzer Track(Form("Track_run_%i_ev_%i_cl_%i", cam_run, cam_event,sc_i),XPix.data(),YPix.data(),ZPix.data(),BeginScPix[sc_i],EndScPix[sc_i]);
+                
+                Track.SetWScal(wFac);
+                Track.SetNPIP(NPIP);
+                Track.ApplyThr();
+                // // Track.RemoveNoise(25); //iron
+                // Track.RemoveNoise(25); //cosmics
+                // Track.RemoveNoise(75);
+                Track.RemoveNoise(100); //alphas
+                Track.ImpactPoint(Form("IP_run_%i_ev_%i_cl_%i", cam_run, cam_event,sc_i));
+                Track.ScaledTrack(Form("Rebinned_run_%i_ev_%i_cl_%i", cam_run, cam_event,sc_i));
+                Track.Direction();
+                Track.ImprCorrectAngle();
+                Track.BuildLineDirection();
 
-                    if (bat_mode) {
-                        points_cam = Track.GetLinePoints(matching_slices,"edges");
-                    }
-                    //----------- Get important track parameters  -----------//
+                points_cam = Track.GetLinePoints(matching_slices,"edges");
 
-                    angle_cam = Track.GetDir()/TMath::Pi()*180.;
-                    xbar = Track.GetXbar();
-                    ybar = Track.GetYbar();
-                    x_impact = Track.GetXIP() * granularity;
-                    y_impact = Track.GetYIP() * granularity;
+                //----------- Get important track parameters  -----------//
 
-                    if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1;
-                    else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
-                    else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
-                    else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
+                angle_cam = Track.GetDir()/TMath::Pi()*180.;
+                xbar = Track.GetXbar();
+                ybar = Track.GetYbar();
+                x_impact = Track.GetXIP() * granularity;
+                y_impact = Track.GetYIP() * granularity;
 
-                    //----------- Verbose information  -----------//
+                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1;
+                else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
+                else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
+                else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
 
-                    cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
-                    cout << "\nTrack information: \n" << endl; 
-                    cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
-                    cout << "--> Quadrant: " << quadrant_cam << endl;
-                    cout << "--> Angle: " << angle_cam << " degrees." << endl;
-                    cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
+                //----------- Verbose information  -----------//
+
+                cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
+                cout << "\nTrack information: \n" << endl; 
+                cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
+                cout << "--> Quadrant: " << quadrant_cam << endl;
+                cout << "--> Angle: " << angle_cam << " degrees." << endl;
+                cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
 
                 if(save_everything) {
                     const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
@@ -278,41 +287,42 @@ int main(int argc, char**argv) {
                     fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
                 }
 
-                    //----------- Collect all the relevant info for posterior analysis  -----------//
+                //----------- Collect all the relevant info for posterior analysis  -----------//
 
-                    CAM_alphas.push_back({
-                        .run = cam_run,
-                        .pic  = cam_event,
-                        .cluster = sc_i,
+                CAM_alphas.push_back({
+                    .run = cam_run,
+                    .pic  = cam_event,
+                    .cluster = sc_i,
 
-                        .angle_XY = angle_cam,
-                        .trv_XY = sc_length[sc_i] * granularity,
+                    .angle_XY = angle_cam,
+                    .trv_XY = sc_length[sc_i] * granularity,
 
-                        .quad = quadrant_cam,
+                    .quad = quadrant_cam,
 
-                        .IP_X_cm = x_impact,
-                        .IP_Y_cm = y_impact,
+                    .IP_X_cm = x_impact,
+                    .IP_Y_cm = y_impact,
 
-                        .its_alpha = cam_PID,
+                    .its_alpha = cam_PID,
 
-                        .track_cam = points_cam,
+                    .track_cam = points_cam,
 
-                        .energy      = sc_integral[sc_i],
-                        .nhits       = sc_nhits[sc_i],
-                        .width       = sc_width[sc_i] * granularity,
-                        .xmean       = sc_xmean[sc_i] * granularity,
-                        .ymean       = sc_ymean[sc_i] * granularity,
-                        .rms         = sc_rms[sc_i],
-                        .tgausssigma = sc_tgausssigma[sc_i]
+                    .energy      = sc_integral[sc_i],
+                    .nhits       = sc_nhits[sc_i],
+                    .width       = sc_width[sc_i] * granularity,
+                    .xmean       = sc_xmean[sc_i] * granularity,
+                    .ymean       = sc_ymean[sc_i] * granularity,
+                    .rms         = sc_rms[sc_i],
+                    .tgausssigma = sc_tgausssigma[sc_i],
 
-                    });      
+                    .fitSig = fitSigma
 
-                    //----------- Cleanup ----------------- -----------//
+                });      
 
-                    if (bat_mode) points_cam.clear();
+                //----------- Cleanup ----------------- -----------//
 
-                } else cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
-            }
+                points_cam.clear();
+
+            } else cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
         }
         sc_redpixID.resize(nSc); // Resize to avoid problem with vector sizes
     }
@@ -329,187 +339,179 @@ int main(int argc, char**argv) {
         
         tree_pmt->GetEntry(pmt_wf);
 
+        if ( pmt_sampling != 1024)                                    continue; 
+        if ( mode == "debug" && pmt_event != debug_event )            continue;
+        if ( !found_clusters_in_evt(CAM_alphas, pmt_run, pmt_event) ) continue;
+
+        if ( pmt_channel == 1) cout << "\n\n\t==> PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
+        if (save_everything) file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
+
+
+        //-----------  Put branch information into vector for further analysis  --------------------------------------------//
+
         shared_ptr<vector<double>> fast_waveform = make_shared<vector<double>>();
-        shared_ptr<vector<double>> slow_waveform = make_shared<vector<double>>();
+        for (int j = 0; j < maxArraySize_fast; ++j) fast_waveform->push_back(pmt_waveforms[j]);
+        // shared_ptr<vector<double>> slow_waveform = make_shared<vector<double>>();
 
-        if ( pmt_sampling == 1024) {          // FULL ANALYSIS mode
 
-            if (mode == "debug" && pmt_event != debug_event) continue;
+        //-----------  Moving average filter applied to smooth high frequency noisy  ----------------------------------------//
+        // Needed to properly get start and end. No problem in exaggerating as I'm not looking for any special features.
+
+        movingAverageFilter(fast_waveform, 20);         
+
+
+        //-----------  Calculate maximum amplitude and get its time coordinate  -----------------------------------------------//
+
+        auto max_it = max_element(fast_waveform->begin(), fast_waveform->end());                // Find the maximum value in the vector
+        double max_value_a = *max_it;                                                           // Dereference the iterator to get the maximum value
+        int max_value_t = time_fast_wf[(distance(fast_waveform->begin(), max_it))];
+
+
+        //-----------  Calculate TOTs 20 and 30 using the value of waveform  ------------------------------------------------//
+
+        TOT20_div = 0.20;                                                                   // Percentage of maximum used to get ToT level
+        TOT20_begin = 0, TOT20_end = 0;
+
+        TOT30_div = 0.30;                                                                   // Percentage of maximum used to get ToT level
+        TOT30_begin = 0, TOT30_end = 0;
+
+        getTOTs( fast_waveform, TOT20_div, TOT30_div,
+            TOT20_begin, TOT20_end, TOT30_begin, TOT30_end,
+            max_value_a, time_fast_wf);
+
+        TOT20.push_back( (TOT20_end-TOT20_begin) );           
+        TOT30.push_back( (TOT30_end-TOT30_begin) );
+
+        
+        //-----------  Getting information for BAT  -------------------------------------------------------------------------//
+
+        sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
+        
+
+        //-----------  Getting travelled Z  -----------//
+        //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
+
+        delta_z = (TOT20_end - TOT20_begin) * (4/3) * (drift_vel/1000.); // in cm,         
+        travelled_Z.push_back(delta_z);
+
+
+        //-----------  Determination of track quadrant from the PMT   -------------------------------------------------------//
+
+        wf_integral = accumulate(fast_waveform->begin(), fast_waveform->end(), 0);
+        integrals_wfs.push_back(wf_integral);
+
+
+        //----------- Calculation of skewness of the Bragg Peak  ------------------------------------------------------------//
+
+        wf_peaks.clear();
+        getSkewness_BraggPeak(fast_waveform, time_fast_wf, TOT20_begin, TOT20_end, 
+        max_value_a, max_value_t, skew_ratio, wf_peaks);
+
+        //----------- Calculation of nPeaks for PID  ------------------------------------------------------------------------//
+
+        wf_peaks_energy_dep.clear();
+        findPeaks(fast_waveform, 50 , wf_peaks_energy_dep);
+        wf_Npeaks_ed += wf_peaks_energy_dep.size();
+
+
+        //----------- Make final waveform plot with all the information  ---------------------------------------------------//
+
+        if(save_everything){ 
+
+            create_and_print_wf_graph_lines3(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
+            time_fast_wf, fast_waveform,
+            TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
+            TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
+            wf_peaks, wf_peaks_energy_dep);
+        }
+
+        //----------- Calculation of all the final variables of interest  --------------------------------------------------//
+        
+        if ( pmt_channel == 4 ) {                   
+
+            cout << "\n\n**PMT Track information: \n" << endl; 
+
+            //----------- Particle ID ---------------------------------//
+
+            pmt_PID_total = false;
+            getAlphaIdentification(TOT20, TOT30, wf_Npeaks_ed, pmt_PID_total, true);
+            cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
+
             
-            if ( pmt_channel == 1) cout << "\n\t==> PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
-            if (save_everything) file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
+            if (pmt_PID_total) {
 
-            //-----------  Put branch information into vector for further analysis  --------------------------------------------//
+                //----------- Calculate direction in Z, and respective score  ------------------------//
 
-
-            for (int j = 0; j < maxArraySize_fast; ++j) fast_waveform->push_back(pmt_waveforms[j]);
+                direction = 0, dir_score = 0;
 
 
-            //-----------  Moving average filter applied to smooth high frequency noisy  ----------------------------------------//
-            // Needed to properly get start and end. No problem in exaggerating as I'm not looking for any special features.
-
-
-            movingAverageFilter(fast_waveform, 20);         
-
-
-            //-----------  Calculate maximum amplitude and get its time coordinate  -----------------------------------------------//
-
-
-            auto max_it = max_element(fast_waveform->begin(), fast_waveform->end());                // Find the maximum value in the vector
-            double max_value_a = *max_it;                                                           // Dereference the iterator to get the maximum value
-            int max_value_t = time_fast_wf[(distance(fast_waveform->begin(), max_it))];
-
-
-            //-----------  Calculate TOTs 20 and 30 using the value of waveform  ------------------------------------------------//
-
-
-            TOT20_div = 0.20;                                                                   // Percentage of maximum used to get ToT level
-            TOT20_begin = 0, TOT20_end = 0;
-
-            TOT30_div = 0.30;                                                                   // Percentage of maximum used to get ToT level
-            TOT30_begin = 0, TOT30_end = 0;
-
-            getTOTs( fast_waveform, TOT20_div, TOT30_div,
-                TOT20_begin, TOT20_end, TOT30_begin, TOT30_end,
-                max_value_a, time_fast_wf);
-
-            TOT20.push_back( (TOT20_end-TOT20_begin) );           
-            TOT30.push_back( (TOT30_end-TOT30_begin) );
-
-            
-            //-----------  Getting information for BAT  -------------------------------------------------------------------------//
-
-
-            if(bat_mode) sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
-            
-
-            //-----------  Getting travelled Z  -----------//
-            //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
-            
-
-            delta_z = (TOT20_end - TOT20_begin) * (4/3) * (drift_vel/1000.); // in cm,         
-            travelled_Z.push_back(delta_z);
-
-
-            //-----------  Determination of track quadrant from the PMT   -------------------------------------------------------//
-
-
-            wf_integral = accumulate(fast_waveform->begin(), fast_waveform->end(), 0);
-            integrals_wfs.push_back(wf_integral);
-
-
-            //----------- Calculation of skewness of the Bragg Peak  ------------------------------------------------------------//
-
-            wf_peaks.clear();
-            getSkewness_BraggPeak(fast_waveform, time_fast_wf, TOT20_begin, TOT20_end, 
-            max_value_a, max_value_t, skew_ratio, wf_peaks);
-
-            wf_peaks_energy_dep.clear();
-            findPeaks(fast_waveform, 50 , wf_peaks_energy_dep);
-            wf_Npeaks_ed += wf_peaks_energy_dep.size();
-
-
-            //----------- Make final waveform plot with all the information  ---------------------------------------------------//
-
-            if(save_everything){ 
-
-                create_and_print_wf_graph_lines3(Form("WF_run_%i_evt_%i_trg_%i_ch_%i",pmt_run,pmt_event,pmt_trigger,pmt_channel), 
-                time_fast_wf, fast_waveform,
-                TOT20_begin, TOT20_end, max_value_a * TOT20_div, 
-                TOT30_begin, TOT30_end, max_value_a * TOT30_div, 
-                wf_peaks, wf_peaks_energy_dep);
-            }
-
-            //----------- Calculation of all the final variables of interest  --------------------------------------------------//
-           
-            if ( pmt_channel == 4 ) {                   
-
-                cout << "\n\n**PMT Track information: \n" << endl; 
-
-                //----------- Particle ID ---------------------------------//
-
-                pmt_PID_total = false;
-                getAlphaIdentification(TOT20, TOT30, wf_Npeaks_ed, pmt_PID_total, true);
-                cout << "--> The particle in this trigger was identified as an alpha: " << pmt_PID_total << endl;
-
-                
-                if (pmt_PID_total) {
-
-                    //----------- Calculate direction in Z, and respective score  ------------------------//
-
-                    direction = 0, dir_score = 0;
-
-
-                    if (!skew_ratio.empty()) {
-                        getDirectionScore(skew_ratio, direction, dir_score, false);
-                    } else {
-                        direction = 0; dir_score = 0;
-                        cout << "No skewness calculated. Direction is ambiguous." << endl;
-                    }
-
-                    if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
-                    else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
-                    else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
-
-
-                    //----------- Calculate travelled Z  ------------------------//
-
-                    avg_travel_z = accumulate(travelled_Z.begin(), travelled_Z.end(), 0.0) / travelled_Z.size();
-                    cout << "--> The average travelled Z (cm) is: " << avg_travel_z << endl;
-
-
-                    //----------- Calculate Quadrant ---------------------------//
-                    
-                    getQuadrantPMT(integrals_wfs, quadrant_pmt);
-                    cout << "--> The track is in the quadrant: " << quadrant_pmt << endl;
-
-
-                    //----------- Run BAT routine ----------------------------//
-
-                    fitted_lum = 0;
-                    if (bat_mode) {
-                        /* File naming a bit hardcoded here */
-                        create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
-                        run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
-                        read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
-                    }
-
-                    //----------- Collect all the relevant info for posterior analysis  -----------//
-
-                    PMT_alphas.push_back({
-                        .run = pmt_run,
-                        .pic  = pmt_event,
-                        .trg = pmt_trigger,
-
-                        .dir = direction,
-                        .prob = (dir_score*100.),
-                        .trv_Z = avg_travel_z,
-
-                        .quad = quadrant_pmt,
-
-                        .its_alpha = pmt_PID_total,
-
-                        .track_pmt = points_bat,
-
-                        .energy = fitted_lum,
-
-                        .num_peaks = wf_Npeaks_ed 
-                    });
+                if (!skew_ratio.empty()) {
+                    getDirectionScore(skew_ratio, direction, dir_score, false);
+                } else {
+                    direction = 0; dir_score = 0;
+                    cout << "No skewness calculated. Direction is ambiguous." << endl;
                 }
 
-                //----------- Clear vector used for the 4 waveforms  -----------//
+                if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
+                else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
+                else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
 
-                TOT30.clear();
-                TOT20.clear();                
-                skew_ratio.clear();                
-                integrals_wfs.clear();                
-                wf_peaks.clear();                
-                wf_peaks_energy_dep.clear();                
-                travelled_Z.clear();
-                integrals_slices.clear();
-                points_bat.clear();
-                wf_Npeaks_ed = 0;
+
+                //----------- Calculate travelled Z  ------------------------//
+
+                avg_travel_z = accumulate(travelled_Z.begin(), travelled_Z.end(), 0.0) / travelled_Z.size();
+                cout << "--> The average travelled Z (cm) is: " << avg_travel_z << endl;
+
+
+                //----------- Calculate Quadrant ---------------------------//
+                
+                getQuadrantPMT(integrals_wfs, quadrant_pmt);
+                cout << "--> The track is in the quadrant: " << quadrant_pmt << endl;
+
+
+                //----------- Run BAT routine ----------------------------//
+
+                fitted_lum = 0;
+                /* File naming a bit hardcoded here */
+                create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
+                run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
+                read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
+
+                //----------- Collect all the relevant info for posterior analysis  -----------//
+
+                PMT_alphas.push_back({
+                    .run = pmt_run,
+                    .pic  = pmt_event,
+                    .trg = pmt_trigger,
+
+                    .dir = direction,
+                    .prob = (dir_score*100.),
+                    .trv_Z = avg_travel_z,
+
+                    .quad = quadrant_pmt,
+
+                    .its_alpha = pmt_PID_total,
+
+                    .track_pmt = points_bat,
+
+                    .energy = fitted_lum,
+
+                    .num_peaks = wf_Npeaks_ed/4 
+                });
             }
+
+            //----------- Clear vector used for the 4 waveforms  -----------//
+
+            TOT30.clear();
+            TOT20.clear();                
+            skew_ratio.clear();                
+            integrals_wfs.clear();                
+            wf_peaks.clear();                
+            wf_peaks_energy_dep.clear();                
+            travelled_Z.clear();
+            integrals_slices.clear();
+            points_bat.clear();
+            wf_Npeaks_ed = 0;
         }
     }
     reco_data_pmt->Close();
@@ -517,9 +519,6 @@ int main(int argc, char**argv) {
     /* **************************************  COMBINED ANALYSIS  ********************************************************************  */
 
     cout << "\n\n************   COMBINED Analysis   ************\n\n" << endl;
-
-    /* -- Note: I'm doing PMT-PID association, and not using BAT as it is not needed when we have 1 alpha per pic at maximum.
-    Instead, we get the BAT information and then compare the distances between bat and real position, comparing automatic association  -- */
 
     /* ************* Combined information ********** */
 
@@ -545,6 +544,7 @@ int main(int argc, char**argv) {
 
     // Remaining variables
     double pmt_energy;
+    double pmt_peaks;
     double cam_energy;
     double cam_nhits;
     double cam_width;
@@ -586,6 +586,7 @@ int main(int argc, char**argv) {
 
     // Remaining variables
     tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
+    tree_3D->Branch("pmt_peaks", &pmt_peaks, "pmt_peaks/D");
     tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
     tree_3D->Branch("cam_nhits", &cam_nhits, "cam_nhits/D");
     tree_3D->Branch("cam_width", &cam_width, "cam_width/D");
@@ -622,6 +623,9 @@ int main(int argc, char**argv) {
         pmt_map[key].push_back(pmt);
     }
 
+    cout << "=> Total amount of alphas in the CAMERA: " << CAM_alphas.size() << endl;
+    cout << "=> Total amount of alphas in the PMT: "    << PMT_alphas.size() << endl;
+    cout << endl;
 
     for (const auto& cam_entry : cam_map) {
 
@@ -633,44 +637,42 @@ int main(int argc, char**argv) {
 
         one_to_one_association(small_dist_assoc, pmt_entries, cam_entries, false);
 
-        // Print the associations
-        // Associate pmt and cam tracks by the smallest distances
-
         cout << "Associations for run " << key.run << ", picture " << key.pic << endl;
-        cout << "Number of total possibilities: " << small_dist_assoc.size() << endl;
-        cout << "Number of CAM alphas: " << cam_entries.size() << endl;
-        cout << "Number of PMT alphas: " << pmt_entries.size() << endl;
+        cout << "# CAM alphas: " << cam_entries.size() << ";  # PMT alphas: " << pmt_entries.size() << endl;
 
-        for (size_t i = 0; i < small_dist_assoc.size(); ++i) {
-            double dd = std::get<0>(small_dist_assoc[i]);
-            size_t cam_idx = std::get<1>(small_dist_assoc[i]);
-            size_t pmt_idx = std::get<2>(small_dist_assoc[i]);
-            const auto& cam = cam_entries[cam_idx];
-            const auto& pmt = pmt_entries[pmt_idx];
-            cout << "Possible combinations: " << endl;
-            cout << " -> CAM cluster # = " << cam_idx << "; PMT trigger" << pmt.trg << "; Distance: " << dd << endl;
-        }
+        // cout << "Total # combinatorics: " << small_dist_assoc.size() << endl;
+        // for (size_t i = 0; i < small_dist_assoc.size(); ++i) {
+        //     double dd = std::get<0>(small_dist_assoc[i]);
+        //     size_t cam_idx = std::get<1>(small_dist_assoc[i]);
+        //     size_t pmt_idx = std::get<2>(small_dist_assoc[i]);
+        //     const auto& cam = cam_entries[cam_idx];
+        //     const auto& pmt = pmt_entries[pmt_idx];
+        //     cout << "Possible combinations: " << endl;
+        //     cout << " -> CAM cluster # = " << cam_idx << "; PMT trigger" << pmt.trg << "; Distance: " << dd << endl;
+        // }
 
         int n_assoc = min(cam_entries.size(), pmt_entries.size());
-        cout << "\nWe'll perform > " << n_assoc << " < associations." << endl;
-        for (size_t i = 0; i < n_assoc; ++i) {
+        cout << "==> We'll perform > " << n_assoc << " < associations." << endl;
+        
+        for (size_t assoc_i = 0; assoc_i < n_assoc; ++assoc_i) {
             
-            double dd = std::get<0>(small_dist_assoc[i]);
-            size_t cam_idx = std::get<1>(small_dist_assoc[i]);
-            size_t pmt_idx = std::get<2>(small_dist_assoc[i]);
+            double dd = std::get<0>(small_dist_assoc[assoc_i]);
+            size_t cam_idx = std::get<1>(small_dist_assoc[assoc_i]);
+            size_t pmt_idx = std::get<2>(small_dist_assoc[assoc_i]);
             
             const auto& cam = cam_entries[cam_idx];
             const auto& pmt = pmt_entries[pmt_idx];
-            
+        
             cout << endl;
-            cout << "-------------------------------------" << endl;
-            cout << "Associated:\n -> CAM alpha # = " << cam_idx << ", cluster = " << cam.cluster << "\n -> PMT alpha # = " << pmt_idx << ", trigger " << pmt.trg << endl;
-            cout << "Distance: " << dd << endl;
-            cout << "-------------------------------------" << endl;
-
+            cout << "---------------------------------------------------\n" << endl;
+            cout << "*** Association # "    << assoc_i+1<< ":"              << endl;
+            cout << endl;
+            cout << " -> CAM cluster = "    << cam.cluster  << endl;
+            cout << " -> PMT trigger "      << pmt.trg      << endl;
+            cout << " -> Distance: "        << dd           << endl;
 
             run = cam.run; picture = cam.pic; trigger = pmt.trg;
-            cout << Form("\n\n ==> Matched alpha in run %i, event %i, trigger %i, quadrant %i, with Alpha-PID = %i", cam.run, cam.pic, pmt.trg, pmt.quad, pmt.its_alpha) << endl;
+            cout << Form("\n ==> Event in run %i, event %i, trigger %i, quadrant %i, with Alpha-PID = %i", cam.run, cam.pic, pmt.trg, pmt.quad, pmt.its_alpha) << endl;
             
             //----------- Creating 3D alpha track information  -----------//
 
@@ -701,11 +703,11 @@ int main(int argc, char**argv) {
 
             //-----------  Accuracy of BAT  -------------------------------//
 
-            if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
+            calculate_distance(pmt.track_pmt, cam.track_cam, distances, false);
             
             //----------- Verbose information  -----------//
 
-            cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
+            cout << "\n  ** 3D Alpha track information: ** \n" << endl; 
             cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
             cout << "--> Travelled XY: "    << XY_length   << endl;
             cout << "--> Angle XY (#phi): "        << XY_angle << endl;
@@ -713,15 +715,18 @@ int main(int argc, char**argv) {
             cout << "--> Direction in Z: "  << pmt_direction      << " at " << abs(pmt_direction_score) << " score" << endl;
             cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
             cout << "--> 3D alpha length (cm): " << full_length  << endl;
+            cout << endl;
+            cout << "---------------------------------------------------" << endl;
 
             if(save_everything){
                 file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                Points_BAT_CAM(pmt.track_pmt, cam.track_cam, "BAT_CAM_association_points");
-                build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+                Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_#%i", assoc_i));
+                build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, abs(pmt_direction_score), Z_angle, full_length, pmt.run, pmt.pic, pmt.trg, true, cam.fitSig*granularity);
             }
             //-----------  Variables for mixed analysis  -------------------------------//
 
             pmt_energy = pmt.energy;
+            pmt_peaks = pmt.num_peaks;
             cam_energy = cam.energy;
             cam_nhits = cam.nhits;
             cam_width = cam.width;
@@ -741,16 +746,8 @@ int main(int argc, char**argv) {
 
     /*
     // for (const auto& cam : CAM_alphas) {
-    // for (size_t i = 0; i < CAM_alphas.size(); ++i) {
-    //     const auto& cam = CAM_alphas[i];
-    //     const auto& next_cam = CAM_alphas[i + 1];
-
-
 
         // for (const auto& pmt : PMT_alphas) {
-        // for (size_t j = 0; j < PMT_alphas.size(); ++j) {
-        //     const auto& pmt = PMT_alphas[i];
-        //     const auto& next_pmt = PMT_alphas[i + 1];
         
             if ( pmt.run == cam.run && pmt.pic == cam.pic) {
 
@@ -790,7 +787,7 @@ int main(int argc, char**argv) {
 
                         //-----------  Accuracy of BAT  -------------------------------//
 
-                        if (bat_mode) calculate_distance(pmt.track_pmt, cam.track_cam, distances, true);
+                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, true);
                         
                         //----------- Verbose information  -----------//
 
@@ -833,12 +830,13 @@ int main(int argc, char**argv) {
 
     file_root->cd();
     tree_3D->Write();
-
     file_root->Close();
 
-    // In order to avoid saving non-alphas. Can only be done after the alpha PID is done. 
-    // Not sure if actually improves the file size, but improves readability.
     deleteNonAlphaDirectories(final_out.c_str());
+
+    auto end = chrono::high_resolution_clock::now();
+    chrono::duration<double> duration = end - start;
+    cout << "Time taken to run the script: " << duration.count() << " seconds" << endl;
 
     cout << "**Finished**" << endl;
     if(!batch_mode) myapp->Run();
@@ -883,55 +881,6 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
     }
 
     sc_redpix_start.clear(); // Clear the temporary storage
-}
-
-void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
-
-    cout << "Deleting non-alpha events from root file..." << endl;
-
-    // Open the ROOT file
-    TFile* file_root = TFile::Open(filename, "UPDATE");
-    if (!file_root || file_root->IsZombie()) {
-        cout << "Error opening file: " << filename << endl;
-        return;
-    }
-
-    // Get the list of directories
-    TIter next(file_root->GetListOfKeys());
-    TKey* key;
-    while ((key = (TKey*)next())) {
-        // Check if the key is a directory
-        if (strcmp(key->GetClassName(), "TDirectoryFile") != 0) continue;
-
-        // Get the directory
-        TDirectory* dir = (TDirectory*)file_root->Get(key->GetName());
-        if (!dir) continue;
-
-        // If deleteAll is true, delete the directory
-        if (deleteAll) {
-            file_root->cd();
-            file_root->rmdir(dir->GetName());
-            continue;
-        } else {
-
-            // Check if the directory contains "3D_vector"
-            bool contains3DVector = false;
-            TIter nextObj(dir->GetListOfKeys());
-            TKey* objKey;
-            while ((objKey = (TKey*)nextObj())) {
-                if (string(objKey->GetName()) == "3D_vector") {
-                    contains3DVector = true;
-                    break;
-                }
-            }
-
-            // If the directory doesn't contain "3D_vector", delete it
-            if (!contains3DVector) {
-                file_root->cd();
-                file_root->rmdir(dir->GetName());
-            }
-        }
-    }
 }
 
 std::string exec(const char* cmd) {
