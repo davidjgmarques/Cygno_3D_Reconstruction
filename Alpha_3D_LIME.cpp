@@ -265,13 +265,18 @@ int main(int argc, char**argv) {
                     cout << "--> Angle: " << angle_cam << " degrees." << endl;
                     cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
 
+                if(save_everything) {
+                    const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
+                    Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_%s",name));     
+                    Track.PlotandSavetoFileDirectionalFull(Form("X_Y_Analyser_%s",name));
                     
-                    // Track.PlotandSavetoFileCOLZ(Form("Track_ev%i_run%i", cam_run, cam_event));           
-                    if(save_everything) {
-                        Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_ev%i_run%i", cam_run, cam_event));     
-                        Track.PlotandSavetoFileDirectionalFull("X-Y Analyser");                            
-                        printTrackProfiles( Track.FillProfile(false), Track.FillProfile(true), "Track profiles");
-                    }
+                    TFitResultPtr fitResult; 
+                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult);     //"memory leak" because two TH2D are created with the same name.
+                    fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
+                    fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
+                    fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
+                    fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
+                }
 
                     //----------- Collect all the relevant info for posterior analysis  -----------//
 

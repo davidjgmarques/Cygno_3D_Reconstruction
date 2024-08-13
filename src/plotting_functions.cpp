@@ -7,7 +7,10 @@
 #include "TAxis.h"
 #include "TH2F.h"
 #include "TH3F.h"
+#include "TF1.h"
+#include "TLatex.h"
 #include "TPolyLine3D.h"
+#include "TPolyMarker3D.h"
 #include "TRandom3.h"
 
 #include "plotting_functions.h"
@@ -85,24 +88,34 @@ void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, s
     c->Write(title.c_str());
 }
 
-void printTrackProfiles ( TH1D *h1, TH1D *h2, std::string title) {
+void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult) {
+
+    // Define the fitting function as a Gaussian plus a constant
+    TF1* func = new TF1("fitFunc", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]", h1->GetXaxis()->GetXmin(), h1->GetXaxis()->GetXmax());
+    func->SetParameters(1, h1->GetMean(), h1->GetRMS(), 0); // Initial parameters: amplitude, mean, sigma, constant
+    func->SetParName(0, "Amplitude");
+    func->SetParName(1, "Mean");
+    func->SetParName(2, "Sigma");
+    func->SetParName(3, "Constant");
+
+    fitResult = h1->Fit(func, "RNS");
 
     TCanvas* c_profiles = new TCanvas("c_profiles","c_profiles",1000,500); 
+    c_profiles->cd();
     c_profiles->Divide(1,2);
 
     c_profiles->cd(1);
     h1->SetTitle("Transversal Profile");
     h1->Draw();
+    func->Draw("same");
 
     c_profiles->cd(2); 
     h2->SetTitle("Longitudinal Profile"); 
     h2->Draw();
     
     c_profiles->DrawClone();
-    // c_profiles->Write("Track profiles",TObject::kWriteDelete);
-    c_profiles->Write("Track profiles");
+    c_profiles->Write(Form("Track_profiles_%s", title.c_str()));
     delete c_profiles;
-
 }
 
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
