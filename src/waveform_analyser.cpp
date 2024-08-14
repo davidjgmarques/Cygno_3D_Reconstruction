@@ -181,8 +181,11 @@ void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_sc
     for (int i = 0; i < skew_ratio.size(); ++i) {
 
         if      (i != max_skew_index)   dir_score += skew_ratio[i]/abs(max_skew);  
-        else if (i == max_skew_index)   dir_score += (max_skew/abs(max_skew)/2.);   // Need to give some weight to the most clear/obvious waveform. In this case, the weight is 0.5                          // Need to give some weight to the most clear wf. In this case, the weight is 1/2
+        // else if (i == max_skew_index)   dir_score += (max_skew/abs(max_skew)/2.);   // Need to give some weight to the most clear/obvious waveform. In this case, the weight is 0.5                      
+        else if (i == max_skew_index)   dir_score += (max_skew/abs(max_skew)*0.75);   // Need to give some weight to the most clear/obvious waveform. In this case, I give it 75% power. More would bias too much the selections
     }
+
+    if (abs(max_skew) < 0.05) dir_score = 0; // If the maximum skewness is too low, all waveforms are saturated or one peaked.
 
     if ( verbose == true) {
         std::cout << std::endl;
