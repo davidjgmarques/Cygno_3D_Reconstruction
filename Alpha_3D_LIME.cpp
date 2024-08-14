@@ -255,6 +255,7 @@ int main(int argc, char**argv) {
 
                 //----------- Get important track parameters  -----------//
 
+                points_cam = Track.GetLinePoints(matching_slices,"edges");
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
                 angle_3D_reverse(angle_cam, points_cam);
 
@@ -399,7 +400,7 @@ int main(int argc, char**argv) {
         //-----------  Getting travelled Z  -----------//
         //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
 
-        delta_z = (TOT20_end - TOT20_begin) * (4/3) * (drift_vel/1000.); // in cm,         
+        delta_z = (TOT20_end - TOT20_begin) * (4./3.) * (drift_vel/1000.);
         travelled_Z.push_back(delta_z);
 
 
