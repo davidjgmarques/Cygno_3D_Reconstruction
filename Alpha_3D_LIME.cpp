@@ -24,6 +24,7 @@ using namespace std;
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
 void deleteNonAlphaDirectories(const char *filename, bool deleteAll = false);
 std::string exec(const char *cmd);
+bool checkCuts(double sc_integral, double sc_nhits, double sc_length, double sc_width, const std::string& cutType);
 
 int main(int argc, char**argv) {
     auto start = std::chrono::high_resolution_clock::now();
@@ -50,10 +51,9 @@ int main(int argc, char**argv) {
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
     
     string filename_cam = argv[ 2 ];
+    string filename_pmt = argv[ 2 ]; // For the cases where the PMT file is not the same as the camera file
 
-    string filename_pmt = argv[ 3 ];
-
-    string outputfile = argv[ 4 ];
+    string outputfile = argv[ 3 ];
     string final_out; 
     if (mode == "full") final_out = "out/" + outputfile + ".root";
     if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
@@ -61,8 +61,8 @@ int main(int argc, char**argv) {
 
     //for debugging and testing
     int debug_event = 0;
-    if (mode == "debug") debug_event = atof(argv[ 5 ]);
-    // int debug_trigger = atof(argv[ 5 ]);
+    if (mode == "debug") debug_event = atof(argv[ 4 ]);
+
 
     /* ****************************************  Definition of variables   **************************************************************************  */
 
@@ -160,12 +160,7 @@ int main(int argc, char**argv) {
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
     UInt_t Nredpix=0;               tree_cam->SetBranchAddress("nRedpix",&Nredpix);
 
-    // --> Reserve even higher than the expected number of pixels to avoid problems with the vector size
     vector<float> sc_redpixID;      sc_redpixID.reserve(1500000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
-    // Run 3
-    // vector<int> XPix;               XPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
-    // vector<int> YPix;               YPix.reserve(150000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
-    // Run 4
     vector<int> XPix;               XPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
     vector<int> YPix;               YPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
     
@@ -185,9 +180,6 @@ int main(int argc, char**argv) {
     int pmt_trigger;    tree_pmt->SetBranchAddress("pmt_wf_trigger",    &pmt_trigger);
     int pmt_channel;    tree_pmt->SetBranchAddress("pmt_wf_channel",    &pmt_channel);
     int pmt_sampling;   tree_pmt->SetBranchAddress("pmt_wf_sampling",   &pmt_sampling);
-
-    // Float_t pmt_baseline;   tree_pmt->SetBranchAddress("pmt_wf_baseline",   &pmt_baseline);
-    // Float_t pmt_RMS;        tree_pmt->SetBranchAddress("pmt_wf_RMS",        &pmt_RMS);
 
     // Use this method to properly read the array since it's not a real vector and then otherwise reads wronmgly the addresses
     // The max length is 4000 (for slow). For reading the fast, I read just the first 1024 samples (the rest is "past memory")
@@ -218,16 +210,18 @@ int main(int argc, char**argv) {
             cam_PID = false;
             cout << "\n\n\t==> Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n\n" << endl;
 
-            // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //cam cut
+            // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //old cam cut
             // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
-            if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
+            // if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
             // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
             // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 10 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
 
+            if (checkCuts(sc_integral[sc_i], sc_nhits[sc_i], sc_length[sc_i], sc_width[sc_i], "alpha")) {
+
+                TString folderName = Form("Run_%i_ev_%i", cam_run, cam_event);
                 if (save_everything) {
-                    TString folderName = Form("Run_%i_ev_%i", cam_run, cam_event);
                     if (!file_root->GetDirectory(folderName)) file_root->mkdir(folderName);
-                    file_root->cd(Form("Run_%i_ev_%i", cam_run, cam_event));
+                    file_root->cd(folderName);
                 }
 
                 cam_PID = true;
@@ -417,7 +411,7 @@ int main(int argc, char**argv) {
         //----------- Calculation of nPeaks for PID  ------------------------------------------------------------------------//
 
         wf_peaks_energy_dep.clear();
-        findPeaks(fast_waveform, 50 , wf_peaks_energy_dep);
+        findPeaks(fast_waveform, 0.5, wf_peaks_energy_dep);
         wf_Npeaks_ed += wf_peaks_energy_dep.size();
 
 
@@ -734,8 +728,10 @@ int main(int argc, char**argv) {
 
             if(save_everything){
                 file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_#%i", assoc_i));
-                build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,XY_length, XY_angle, Z_length, pmt.dir, abs(pmt_direction_score), Z_angle, full_length, pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
+                Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_cl_%i_trg_%i", cam.cluster, pmt.trg));
+                build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,
+                    XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
+                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
             }
             //-----------  Variables for mixed analysis  -------------------------------//
 
@@ -846,7 +842,9 @@ int main(int argc, char**argv) {
     tree_3D->Write();
     file_root->Close();
 
-    deleteNonAlphaDirectories(final_out.c_str());
+    // After adding the function to do PMT-analysis only for CAM-found alphas, cleaning the file is no longer (very) needed.\
+    // Like this, one can also cross-check why no matching occurred.
+    // deleteNonAlphaDirectories(final_out.c_str());
 
     auto end = chrono::high_resolution_clock::now();
     chrono::duration<double> duration = end - start;
@@ -860,6 +858,35 @@ int main(int argc, char**argv) {
 
 
 /*  *****************************************************************************************************************************************************************************************************************  */
+
+bool checkCuts(double sc_integral, double sc_nhits, double sc_length, double sc_width, const std::string& cutType) {
+    
+    if (cutType == "alpha") {   //From Giorgio
+
+        if (sc_integral / sc_nhits > 25 && sc_length > 100 && sc_width > 50) {
+            return true;
+        }
+    } else if (cutType == "cosmics_thesis_1") {
+
+        if (sc_integral / sc_nhits < 25 && sc_length > 100 && sc_width > 0) {
+            return true;
+        }
+    } else if (cutType == "cosmics_thesis_2") {
+
+        if (sc_integral / sc_nhits < 25 && sc_length > 10 && sc_width > 0) {
+            return true;
+        }
+    } 
+    
+    // else if (cutType == "geometrical") {
+    //     // ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
+    // }
+    // else if (cutType == "old_cam_cut") {
+    //     // ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8) {
+    // }
+
+    return false;
+}
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E){
     // Function to calculate indices for clusters based on reduced pixels

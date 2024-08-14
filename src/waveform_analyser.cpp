@@ -41,7 +41,7 @@ void movingAverageFilter(std::shared_ptr<std::vector<double>>& input_wf, int win
     *input_wf = std::move(filtered);
 }
 
-void getTOTs (std::shared_ptr<std::vector<double>> input_wf, double t20_div, double t30_div, 
+void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_div, double t30_div, 
     int &t20_b, int &t20_e, int &t30_b, int &t30_e, double max, std::vector<int> time) {
 
     for (int p = 0; p < input_wf->size(); ++p) {
@@ -57,7 +57,7 @@ void getTOTs (std::shared_ptr<std::vector<double>> input_wf, double t20_div, dou
     if (t30_e == 0) t30_e = 1024;
 }
 
-void sliceWaveform_BAT (std::shared_ptr<std::vector<double>> input_wf, 
+void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf, 
     std::vector<std::vector<double>> &integrals,
     int nSlices, int TOT20_b, int TOT20_e) {
 
@@ -82,7 +82,7 @@ void sliceWaveform_BAT (std::shared_ptr<std::vector<double>> input_wf,
     }
 }
 
-void getSkewness_BraggPeak (std::shared_ptr<std::vector<double>> input_wf, std::vector<int> time_fast_wf,
+void getSkewness_BraggPeak (const std::shared_ptr<std::vector<double>> &input_wf, std::vector<int> time_fast_wf,
     int TOT20_b, int TOT20_e, double max_a, int max_t,
     std::vector<double> &skewnesses, std::vector<std::pair<int,double>> &peaks) {
 
@@ -95,11 +95,11 @@ void getSkewness_BraggPeak (std::shared_ptr<std::vector<double>> input_wf, std::
         for (int p = TOT20_e - 1; p > TOT20_b; --p) {       // Searches for peak starting from the end
 
             if ( (*input_wf)[p] < (*input_wf)[p+1] && (*input_wf)[p+1] > 0.4*max_a) {       // I know the peak will be in the crown, so I look only for "high amplitude" peaks.
-
-                peak2.first     = time_fast_wf[p+1];
-                peak2.second    = (*input_wf)[p+1];
+                
                 peak1.first     = max_t;
                 peak1.second    = max_a;
+                peak2.first     = time_fast_wf[p+1];
+                peak2.second    = (*input_wf)[p+1];
                 break;
             } 
         }
@@ -127,31 +127,7 @@ void getSkewness_BraggPeak (std::shared_ptr<std::vector<double>> input_wf, std::
     peaks.push_back(peak2);
 }
 
-// void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>> &peaks2) {
-//     int peak_count = 0;
-//     int n = input_wf->size();
-
-//     double left_min;
-//     double right_min;
-//     double peak_prominence;
-
-//     for (int i = 200; i < n - 1; ++i) {
-//         // Check if the current point is a peak
-//         if ((*input_wf)[i] > (*input_wf)[i - 1] && (*input_wf)[i] > (*input_wf)[i + 1]) {
-//             // Check if the peak meets the prominence criteria
-//             left_min = (*input_wf)[i - 1];
-//             right_min = (*input_wf)[i + 1];
-//             peak_prominence = (*input_wf)[i] - std::max(left_min, right_min);
-
-//             if (peak_prominence >= prominence * (*input_wf)[i]) {
-//                 peaks2.emplace_back(i, (*input_wf)[i]);
-//                 peak_count++;
-//             }
-//         }
-//     }
-// }
-
-void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence_percentage, std::vector<std::pair<int, double>>& peaks2, bool verbose) {
+void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>>& peaks2, bool verbose) {
     
     int n = input_wf->size();
     TSpectrum spectrum;
@@ -184,7 +160,7 @@ void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prom
         double right_min = *std::min_element(input_wf->begin() + index + 1, input_wf->begin() + right_index + 1);
 
         double peakProminence = amplitude - std::max(left_min, right_min);
-        double prominence_threshold = amplitude * (prominence_percentage / 100.0);
+        double prominence_threshold = amplitude * (prominence);
 
         // Check if the peak prominence meets the threshold
         if (peakProminence >= prominence_threshold) {
