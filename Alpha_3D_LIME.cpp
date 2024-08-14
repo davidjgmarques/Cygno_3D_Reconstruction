@@ -243,15 +243,22 @@ int main(int argc, char**argv) {
                 Track.ImprCorrectAngle();
                 Track.BuildLineDirection();
 
-                points_cam = Track.GetLinePoints(matching_slices,"edges");
+                xbar = Track.GetXbar();
+                ybar = Track.GetYbar();
+                if (save_everything && (isnan(xbar) || isnan(ybar))) {
+                    cout << "x_bar or y_bar is NaN. Skipping event..." << endl;
+                    points_cam.clear();
+                    // file_root->cd(folderName);
+                    // file_root->rmdir(folderName);    // Remove the directory is breaking the code
+                    continue;
+                } 
 
                 //----------- Get important track parameters  -----------//
 
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
                 angle_3D_reverse(angle_cam, points_cam);
 
-                xbar = Track.GetXbar();
-                ybar = Track.GetYbar();
+
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
 
