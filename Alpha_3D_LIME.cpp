@@ -23,14 +23,14 @@ using namespace std;
 
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E);
 void deleteNonAlphaDirectories(const char *filename, bool deleteAll = false);
-std::string exec(const char* cmd); 
+std::string exec(const char *cmd);
 
 int main(int argc, char**argv) {
     auto start = std::chrono::high_resolution_clock::now();
 
     /* ****************************************  Running options   **************************************************************************  */
 
-    bool save_everything = false;    //opposite of saving *only* the alpha-tree
+    bool save_everything = true;    //opposite of saving *only* the alpha-tree
 
     string mode = argv[ 1 ]; // debug or full
     bool batch_mode;
@@ -74,7 +74,8 @@ int main(int argc, char**argv) {
     // -----------------  Analyzer constants  ----------------- //
 
     // For alphas (David)
-    Int_t NPIP=2000; Float_t wFac=3.5;
+    // Int_t NPIP=3000; Float_t wFac=3.5;
+    Int_t NPIP=2500; Float_t wFac=3.5;
     
     // For ER (original from Samuele)
     // Int_t NPIP=80; Float_t wFac=2.5;
@@ -125,7 +126,7 @@ int main(int argc, char**argv) {
     vector<pair<double,double>> points_cam;
 
     // CAM variables
-    double x_impact, y_impact;
+    // double x_impact, y_impact;
     double xbar, ybar;
     double angle_cam;
 
@@ -154,8 +155,6 @@ int main(int argc, char**argv) {
     vector<float> sc_width;       sc_width.reserve(150000);       tree_cam->SetBranchAddress("sc_width",      sc_width.data());
     vector<float> sc_xmean;       sc_xmean.reserve(150000);       tree_cam->SetBranchAddress("sc_xmean",      sc_xmean.data());  
     vector<float> sc_ymean;       sc_ymean.reserve(150000);       tree_cam->SetBranchAddress("sc_ymean",      sc_ymean.data());  
-    vector<float> sc_xmin;        sc_xmin.reserve(150000);        tree_cam->SetBranchAddress("sc_xmin",       sc_xmin.data());  
-    vector<float> sc_ymin;        sc_ymin.reserve(150000);        tree_cam->SetBranchAddress("sc_ymin",       sc_ymin.data());  
     vector<float> sc_nhits;       sc_nhits.reserve(150000);       tree_cam->SetBranchAddress("sc_nhits",      sc_nhits.data());  
 
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
@@ -255,10 +254,12 @@ int main(int argc, char**argv) {
                 //----------- Get important track parameters  -----------//
 
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
+                angle_3D_reverse(angle_cam, points_cam);
+
                 xbar = Track.GetXbar();
                 ybar = Track.GetYbar();
-                x_impact = Track.GetXIP() * granularity;
-                y_impact = Track.GetYIP() * granularity;
+                // x_impact = Track.GetXIP() * granularity;
+                // y_impact = Track.GetYIP() * granularity;
 
                 if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1;
                 else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
@@ -281,10 +282,15 @@ int main(int argc, char**argv) {
                     
                     TFitResultPtr fitResult; 
                     printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult);     //"memory leak" because two TH2D are created with the same name.
-                    fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
-                    fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
-                    fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
-                    fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
+                    
+                    if (fitResult.Get()) {
+                        fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
+                        fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
+                        fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
+                        fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
+                    } else {
+                        fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0;
+                    }
                 }
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
@@ -299,8 +305,10 @@ int main(int argc, char**argv) {
 
                     .quad = quadrant_cam,
 
-                    .IP_X_cm = x_impact,
-                    .IP_Y_cm = y_impact,
+                    .begin_X_cm = points_cam.front().first   * granularity,
+                    .begin_Y_cm = points_cam.front().second  * granularity,
+                    .end_X_cm   = points_cam.back().first   * granularity,
+                    .end_Y_cm   = points_cam.back().second  * granularity,
 
                     .its_alpha = cam_PID,
 
@@ -315,7 +323,6 @@ int main(int argc, char**argv) {
                     .tgausssigma = sc_tgausssigma[sc_i],
 
                     .fitSig = fitSigma
-
                 });      
 
                 //----------- Cleanup ----------------- -----------//
@@ -526,7 +533,7 @@ int main(int argc, char**argv) {
     int run, picture, trigger;
     
     //3D track variables
-    double IP_X, IP_Y, IP_Z;
+    double begin_X, begin_Y, begin_Z;
     double track_end_X, track_end_Y, track_end_Z;
     double Z_angle, XY_angle;
     double Z_length, XY_length;
@@ -561,9 +568,9 @@ int main(int argc, char**argv) {
     tree_3D->Branch("trigger", &trigger, "trigger/I");
 
     // 3D track variables
-    tree_3D->Branch("IP_X", &IP_X, "IP_X/D");
-    tree_3D->Branch("IP_Y", &IP_Y, "IP_Y/D");
-    tree_3D->Branch("IP_Z", &IP_Z, "IP_Z/D");
+    tree_3D->Branch("begin_X", &begin_X, "begin_X/D");
+    tree_3D->Branch("begin_Y", &begin_Y, "begin_Y/D");
+    tree_3D->Branch("begin_Z", &begin_Z, "begin_Z/D");
     tree_3D->Branch("track_end_X", &track_end_X, "track_end_X/D");
     tree_3D->Branch("track_end_Y", &track_end_Y, "track_end_Y/D");
     tree_3D->Branch("track_end_Z", &track_end_Z, "track_end_Z/D");
@@ -676,20 +683,27 @@ int main(int argc, char**argv) {
             
             //----------- Creating 3D alpha track information  -----------//
 
-            IP_X = cam.IP_X_cm;
-            IP_Y = cam.IP_Y_cm;               
-            IP_Z = 25.0;                          // Absolute Z fixed.
-
-            track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
-            track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
-            track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
-
-            Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
-            XY_angle = cam.angle_XY;
+            begin_X = cam.begin_X_cm;
+            begin_Y = cam.begin_Y_cm;               
+            begin_Z = 25.0;                          // Absolute Z fixed.
 
             Z_length = pmt.trv_Z;
-            XY_length = cam.trv_XY;
-            full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
+
+            XY_length = sqrt(pow(cam.end_X_cm - begin_X, 2) + pow(cam.end_Y_cm - begin_Y, 2));
+            track_end_X = cam.end_X_cm;
+            track_end_Y = cam.end_Y_cm;
+
+            // --- sc_length is not reliable because of the shadow. Thus I use directly  the "Edges" of the track
+            // XY_length = cam.trv_XY;                              
+            // track_end_X = begin_X + ( XY_length * cos(cam.angle_XY * TMath::Pi()/180.));        
+            // track_end_Y = begin_Y + ( XY_length * sin(cam.angle_XY * TMath::Pi()/180.));        
+            
+            track_end_Z = begin_Z + ( Z_length  * pmt.dir);                                        // if dir = 0, track doesn't show Z direction       
+
+            Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi();
+            XY_angle = cam.angle_XY;
+
+            full_length = TMath::Sqrt(pow(XY_length,2) + pow(Z_length,2));
 
             pmt_direction = pmt.dir;
             pmt_direction_score = pmt.prob;
@@ -708,7 +722,7 @@ int main(int argc, char**argv) {
             //----------- Verbose information  -----------//
 
             cout << "\n  ** 3D Alpha track information: ** \n" << endl; 
-            cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
+            cout << "--> Position, X: " << begin_X << "; Y: " << begin_Y  << endl;
             cout << "--> Travelled XY: "    << XY_length   << endl;
             cout << "--> Angle XY (#phi): "        << XY_angle << endl;
             cout << "--> Travelled Z: "     << Z_length    << endl;
@@ -721,7 +735,7 @@ int main(int argc, char**argv) {
             if(save_everything){
                 file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
                 Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_#%i", assoc_i));
-                build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, abs(pmt_direction_score), Z_angle, full_length, pmt.run, pmt.pic, pmt.trg, true, cam.fitSig*granularity);
+                build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,XY_length, XY_angle, Z_length, pmt.dir, abs(pmt_direction_score), Z_angle, full_length, pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
             }
             //-----------  Variables for mixed analysis  -------------------------------//
 
@@ -760,13 +774,13 @@ int main(int argc, char**argv) {
                         
                         //----------- Creating 3D alpha track information  -----------//
 
-                        IP_X = cam.IP_X_cm;
-                        IP_Y = cam.IP_Y_cm;               
-                        IP_Z = 25.0;                          // Absolute Z fixed.
+                        begin_X = cam.begin_X_cm;
+                        begin_Y = cam.begin_Y_cm;               
+                        begin_Z = 25.0;                          // Absolute Z fixed.
 
-                        track_end_X = IP_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
-                        track_end_Y = IP_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
-                        track_end_Z = IP_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
+                        track_end_X = begin_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
+                        track_end_Y = begin_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
+                        track_end_Z = begin_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
 
                         Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
                         XY_angle = cam.angle_XY;
@@ -792,7 +806,7 @@ int main(int argc, char**argv) {
                         //----------- Verbose information  -----------//
 
                         cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
-                        cout << "--> Position, X: " << IP_X << "; Y: " << IP_Y  << endl;
+                        cout << "--> Position, X: " << begin_X << "; Y: " << begin_Y  << endl;
                         cout << "--> Travelled XY: "    << XY_length   << endl;
                         cout << "--> Angle XY (#phi): "        << XY_angle << endl;
                         cout << "--> Travelled Z: "     << Z_length    << endl;
@@ -802,7 +816,7 @@ int main(int argc, char**argv) {
 
                         if(save_everything){
                             file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                            build_3D_vector(IP_X,track_end_X,IP_Y,track_end_Y,IP_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
+                            build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
                         }
                         //-----------  Variables for mixed analysis  -------------------------------//
 

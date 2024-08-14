@@ -200,10 +200,7 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     //-------  3D box with LIME's dimensions in cm  --------//
 
     TCanvas *c_3D = new TCanvas(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), 700, 700); c_3D->cd();
-
-    TH3F *axis = new TH3F(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);       //155, 36  
-    // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -1.5, 34.5, 1, 0, 50, 1, -1.5, 34.5);   //155, 36    
-    // TH3F *axis = new TH3F("h3", Form("Alpha 3D vector run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, -0.9, 33.9, 1, 0, 50, 1, -0.9, 33.9);   //151, 34.8    
+    TH3F *axis = new TH3F(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);      
     axis->SetStats(0);
     axis->GetXaxis()->SetTitle("X");
     axis->GetYaxis()->SetTitle("Z");

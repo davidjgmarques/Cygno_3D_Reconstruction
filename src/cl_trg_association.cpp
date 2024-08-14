@@ -53,6 +53,19 @@ bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt
     return found;    
 }
 
+void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &points_cam)
+{
+    // Check the angle and reverse the vector if necessary
+    // Only relevant for plotting purposes, since the angle is saved directly in the structure
+    // Irrelevant for BAT-CAM distance matching, because there  I actually order the points by X.
+    // Added later due to the change in the way the track end point is calculated.
+
+    if (angle_cam > 90.0 || angle_cam < -90.0)
+    {
+        std::reverse(points_cam.begin(), points_cam.end());
+    }
+}
+
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
 
     std::cout << "Deleting non-alpha events from root file..." << std::endl;

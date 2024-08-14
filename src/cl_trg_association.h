@@ -14,8 +14,11 @@ struct AlphaTrackCAM {
     double trv_XY;
     int quad;
 
-    double IP_X_cm;
-    double IP_Y_cm;
+    double begin_X_cm;
+    double begin_Y_cm;
+
+    double end_X_cm;
+    double end_Y_cm;
 
     bool its_alpha;
 
@@ -68,6 +71,9 @@ void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dis
 bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt_run, int pmt_event);
 
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll);
+
+void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &points_cam);
+
 
 
 #endif // CL_TRG_ASSOCIATION_H
