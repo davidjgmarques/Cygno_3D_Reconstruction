@@ -98,7 +98,7 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     func->SetParName(2, "Sigma");
     func->SetParName(3, "Constant");
 
-    fitResult = h1->Fit(func, "RNS");
+    fitResult = h1->Fit(func, "RNSQ");
 
     TCanvas* c_profiles = new TCanvas("c_profiles","c_profiles",1000,500); 
     c_profiles->cd();
@@ -120,15 +120,22 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
 
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
     
-    TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 600);
+    TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 800);
     cpoints->cd();
 
     // Create a dummy histogram to set the axis ranges and titles
     TH2F *dummyHist = new TH2F("dummyHist", title.c_str(), 1, 0, 2304, 1, 0, 2304);
+    dummyHist->GetXaxis()->SetTitle("X pixels [#]");
+    dummyHist->GetXaxis()->SetTitleSize(0.045);
+    dummyHist->GetXaxis()->SetTitleOffset(1);
+    dummyHist->GetYaxis()->SetTitle("Y pixels [#]");
+    dummyHist->GetYaxis()->SetTitleSize(0.045);
+    dummyHist->GetYaxis()->SetTitleOffset(1);
+
     gStyle->SetOptStat(0);  // Disable statistics box
     dummyHist->Draw();
 
-    TLegend *legend = new TLegend();
+    TLegend *legend = new TLegend(0.6, 0.7, 0.87, 0.87);
 
     for (size_t i = 0; i < batPoints.size(); i++) {
         const auto& point = batPoints[i];
@@ -178,12 +185,12 @@ void addTracks(TCanvas *image, TH2F* histo, TH2F* track, int fminx, int fminy, s
             if (binX <= histo->GetNbinsX() && binY <= histo->GetNbinsY()) {
                 histo->SetBinContent(binX, binY, content);
             }
-      }
+        }
     }
 
     image->cd();
     histo->Draw("SAME COLZ");
-    // histo->DrawClone();
+    image->DrawClone();
     // canv->Write();
     
     // delete canv;
@@ -200,7 +207,7 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     //-------  3D box with LIME's dimensions in cm  --------//
 
     TCanvas *c_3D = new TCanvas(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), 700, 700); c_3D->cd();
-    TH3F *axis = new TH3F(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr) , 1, 0, 36, 1, 0, 50, 1, 0, 36);      
+    TH3F *axis = new TH3F(Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr), Form("Alpha_3D_vector_run_%i_pic_%i_trig_%i", ru, pi, tr) , 72, 0, 36, 100, 0, 50, 72, 0, 36); //nb: some bins are needed just to be able to zoom      
     axis->SetStats(0);
     axis->GetXaxis()->SetTitle("X");
     axis->GetYaxis()->SetTitle("Z");
