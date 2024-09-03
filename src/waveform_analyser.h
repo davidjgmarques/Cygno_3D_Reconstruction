@@ -10,8 +10,8 @@ void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_d
     int &t20_b, int &t20_e, int &t30_b, int &t30_e, double max, std::vector<int> time);
 
 void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf, 
-    std::vector<std::vector<double>> &integrals, int nSlices,
-    int TOT20_b, int TOT20_e);
+    std::vector<std::vector<double>> &integrals,
+    int nSlices, int TOT20_b, int TOT20_e, bool plots);
 
 void getQuadrantPMT( std::vector<double>& integrals, int &quadrant_pmt);
 
@@ -24,6 +24,5 @@ void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_sc
 void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30,  const double & peaks_ed, bool &pmt_PID_total, bool verbose = true);
 
 void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>>& peaks2, bool verbose = false);
-
 
 #endif

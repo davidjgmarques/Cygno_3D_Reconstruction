@@ -9,6 +9,9 @@
 #include "TH1.h"
 #include "TStyle.h"
 #include "TCanvas.h"
+#include "TGraph.h"
+#include "TLine.h"
+#include "TLegend.h"
 
 #include "waveform_analyser.h"
 
@@ -59,13 +62,16 @@ void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_d
 
 void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf, 
     std::vector<std::vector<double>> &integrals,
-    int nSlices, int TOT20_b, int TOT20_e) {
+    int nSlices, int TOT20_b, int TOT20_e, bool plots) {
 
     double slice_width = (TOT20_e - TOT20_b)/nSlices;
     double peak_int_counter;
     double peak_val;
 
     integrals.push_back(std::vector<double>{});
+
+    int nLines = nSlices + 1;
+    vector<int> line_p;
 
     for (int s = 0; s < nSlices; ++s) {
 
@@ -79,6 +85,50 @@ void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf,
         }
 
         integrals.back().push_back(peak_val/peak_int_counter);
+
+        if (plots) {
+            line_p.push_back(static_cast<int>(TOT20_b+slice_width*(s)));
+            if (s == 4) line_p.push_back(static_cast<int>(TOT20_b+slice_width*(s+1)));
+        }
+    }
+
+    if (plots) {
+
+        TCanvas *ca = new TCanvas("h", "Waveform");
+        ca->cd();
+
+        TGraph *gWaveform = new TGraph();
+
+        Int_t p=0;
+        for (int k = 0; k < input_wf->size(); ++k){
+            gWaveform -> SetPoint ( p, p, (*input_wf)[k]); p++;
+        }
+
+        gWaveform->SetMarkerColor(kAzure-5);
+        gWaveform->SetLineColor(kAzure-5);
+        gWaveform->SetLineWidth(3);
+        gWaveform->Draw();
+
+        TLine *lines[nLines];
+        for ( Int_t line = 0; line < nLines; ++line){
+
+            lines[line]= new TLine(line_p[line],gWaveform->GetYaxis()->GetXmin(),line_p[line],gWaveform->GetYaxis()->GetXmax());
+
+            lines[line]->SetLineColor(kRed-7);
+            lines[line]->SetLineWidth(2);
+            lines[line]->SetLineStyle(9);
+            lines[line]->Draw("same");
+        }
+
+        TLegend *legend = new TLegend();
+        legend->AddEntry(gWaveform, "Waveform", "l");
+        legend->AddEntry(lines[0], "Slices", "l");
+        legend->Draw("same");
+
+        ca->DrawClone();
+
+        delete gWaveform;
+        delete ca;
     }
 }
 
@@ -193,7 +243,7 @@ void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_sc
         std::cout << "-> Ratios: "; for (auto &val : skew_ratio) std::cout << val << " * "; std::cout<<std::endl;
         std::cout << "-> Abs max ratio: " << abs(max_skew) << std::endl;
         std::cout << "-> Normalized: "; for (auto &val : skew_ratio) std::cout << (double)val/abs(max_skew) << " # "; std::cout<<std::endl;
-        std::cout << "** Final Score: " << dir_score*100. << " **" << std::endl;
+        std::cout << "** Final Score: " << dir_score << " **" << std::endl;
     }    
 
     if      (dir_score <= -0.5 )                     dir = -1;
@@ -221,7 +271,6 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
         if ( (TOT20[q] / TOT30[q]) >= 1 && (TOT20[q] / TOT30[q]) <= 2 ) count_id1++;
 
         // Check if the TOT20 is greater than 200 (to remove Fe-like events)       
-        // if ( TOT20[q] >= 200 ) count_id2++;
         if ( TOT20[q] >= 70 ) count_id2++;  //100 ->80->70
     }
 

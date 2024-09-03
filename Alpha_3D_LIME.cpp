@@ -394,8 +394,7 @@ int main(int argc, char**argv) {
         
         //-----------  Getting information for BAT  -------------------------------------------------------------------------//
 
-        sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end);
-        
+        sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end, true);
 
         //-----------  Getting travelled Z  -----------//
         //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
