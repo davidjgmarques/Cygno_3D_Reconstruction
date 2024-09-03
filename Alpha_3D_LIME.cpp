@@ -63,6 +63,10 @@ int main(int argc, char**argv) {
     int debug_event = 0;
     if (mode == "debug") debug_event = atof(argv[ 4 ]);
 
+    // Use to create a canvas for the real picture with multiple events
+    TCanvas *real_pic = new TCanvas("real_pic","real_pic",800,800);
+    TH2F *real_pic_hist = new TH2F("real_pic_hist","real_pic_hist",2305,0,2305,2305,0,2305);
+    bool real_pic_plot = true;
 
     /* ****************************************  Definition of variables   **************************************************************************  */
 
@@ -294,6 +298,8 @@ int main(int argc, char**argv) {
                     } else {
                         fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0;
                     }
+
+                    if (real_pic_plot) addTracks(real_pic, real_pic_hist, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Real_pic_hist_%s",name)); 
                 }
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
