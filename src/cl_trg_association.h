@@ -74,6 +74,8 @@ void deleteNonAlphaDirectories(const char* filename, bool deleteAll);
 
 void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &points_cam);
 
+int generate_random_direction();
+
 
 
 #endif // CL_TRG_ASSOCIATION_H

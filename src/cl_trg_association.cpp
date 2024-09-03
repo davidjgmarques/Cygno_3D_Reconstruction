@@ -6,6 +6,7 @@
 #include <iostream>
 #include <TFile.h>
 #include <TKey.h>
+#include <random>
 
 #include "cl_trg_association.h"
 #include "bat_functions.h"
@@ -116,4 +117,14 @@ void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
             }
         }
     }
+}
+
+int generate_random_direction() {
+
+    std::random_device rd;  // Seed
+    std::mt19937 gen(rd()); // Random number generator
+    std::uniform_int_distribution<> dis(0, 1); // Distribution that generates 0 or 1
+    int random_dir = dis(gen) * 2 - 1; // Convert 0 or 1 to -1 or 1
+
+    return random_dir;
 }

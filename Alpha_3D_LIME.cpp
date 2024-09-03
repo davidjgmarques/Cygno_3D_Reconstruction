@@ -93,6 +93,7 @@ int main(int argc, char**argv) {
     // Direction
     int direction; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
     double dir_score;
+    int random_dir;
     bool verbose_dir_score = false;
     
     //Waveform analysis
@@ -701,7 +702,20 @@ int main(int argc, char**argv) {
             
             track_end_Z = begin_Z + ( Z_length  * pmt.dir);                                        // if dir = 0, track doesn't show Z direction       
 
-            Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi();
+            if ( pmt.dir != 0) {
+                Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi() * pmt.dir;
+            } else {
+                // If the direction is not clear, I generate a random direction. Important to not bias the results .
+
+                random_dir = generate_random_direction();
+
+                cout << "Random direction: " << random_dir << endl;
+
+                Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi() * random_dir;
+            } 
+
+            // Z_angle = atan(Z_length/(track_end_X-begin_X)) * 180. / TMath::Pi();
+            // Z_angle = atan2(Z_length,(double)(track_end_X-begin_X)) * 180. / TMath::Pi();
             XY_angle = cam.angle_XY;
 
             full_length = TMath::Sqrt(pow(XY_length,2) + pow(Z_length,2));
