@@ -95,7 +95,7 @@ int main(int argc, char**argv) {
     vector<int> time_slow_wf(4000); iota(time_slow_wf.begin(), time_slow_wf.end(), 0);
 
     // Direction
-    int direction; // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
+    int direction; /// -1 = towards cathode; 1 = towards GEM; 0 = ambiguous
     double dir_score;
     int random_dir;
     bool verbose_dir_score = false;
@@ -467,9 +467,9 @@ int main(int argc, char**argv) {
                     cout << "No skewness calculated. Direction is ambiguous." << endl;
                 }
 
-                if      (direction == -1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score*100.   << endl;
-                else if (direction == +1 ) cout << "--> Moving towards the cathode with score: "  << dir_score*100.   << endl;
-                else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score*100. << endl;
+                if      (direction == +1 ) cout << "--> Moving towards the GEMs with score: "     << dir_score   << endl;
+                else if (direction == -1 ) cout << "--> Moving towards the cathode with score: "  << dir_score   << endl;
+                else if (direction ==  0 ) cout << "--> Ambiguous. Score: " << dir_score << endl;
 
 
                 //----------- Calculate travelled Z  ------------------------//
@@ -500,7 +500,7 @@ int main(int argc, char**argv) {
                     .trg = pmt_trigger,
 
                     .dir = direction,
-                    .prob = (dir_score*100.),
+                    .prob = dir_score,
                     .trv_Z = avg_travel_z,
 
                     .quad = quadrant_pmt,

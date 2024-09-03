@@ -42,7 +42,7 @@ struct AlphaTrackPMT {
     int pic;
     int trg;
 
-    int dir;        // -1 = towards GEM ; 1 = towards cathode; 0 = ambiguous
+    int dir;        // -1 = towards cathode; 1 = towards GEM; 0 = ambiguous
     double prob;    
     double trv_Z;
     int quad;
