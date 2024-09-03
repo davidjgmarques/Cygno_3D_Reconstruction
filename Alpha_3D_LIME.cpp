@@ -55,8 +55,8 @@ int main(int argc, char**argv) {
 
     string outputfile = argv[ 3 ];
     string final_out; 
-    if (mode == "full") final_out = "out/" + outputfile + ".root";
-    if (mode == "debug") final_out = "out/debug_" + outputfile + ".root";
+    if (mode == "full") final_out = outputfile + ".root";
+    if (mode == "debug") final_out = "debug_" + outputfile + ".root";
     TFile* file_root = new TFile(final_out.c_str(),"recreate");
 
     //for debugging and testing
@@ -166,6 +166,8 @@ int main(int argc, char**argv) {
     UInt_t Nredpix=0;               tree_cam->SetBranchAddress("nRedpix",&Nredpix);
 
     vector<float> sc_redpixID;      sc_redpixID.reserve(1500000);    tree_cam->SetBranchAddress("sc_redpixIdx",sc_redpixID.data());
+    // vector<int> XPix;               XPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_iy",       XPix.data());  
+    // vector<int> YPix;               YPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_ix",       YPix.data());
     vector<int> XPix;               XPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_ix",       XPix.data());  
     vector<int> YPix;               YPix.reserve(1500000);           tree_cam->SetBranchAddress("redpix_iy",       YPix.data());
     
@@ -250,11 +252,10 @@ int main(int argc, char**argv) {
 
                 xbar = Track.GetXbar();
                 ybar = Track.GetYbar();
-                if (save_everything && (isnan(xbar) || isnan(ybar))) {
+
+                if (isnan(xbar) || isnan(ybar)) {
                     cout << "x_bar or y_bar is NaN. Skipping event..." << endl;
                     points_cam.clear();
-                    // file_root->cd(folderName);
-                    // file_root->rmdir(folderName);    // Remove the directory is breaking the code
                     continue;
                 } 
 
@@ -697,9 +698,9 @@ int main(int argc, char**argv) {
 
             Z_length = pmt.trv_Z;
 
-            XY_length = sqrt(pow(cam.end_X_cm - begin_X, 2) + pow(cam.end_Y_cm - begin_Y, 2));
             track_end_X = cam.end_X_cm;
             track_end_Y = cam.end_Y_cm;
+            XY_length = sqrt(pow(track_end_X - begin_X, 2) + pow(track_end_Y - begin_Y, 2));
 
             // --- sc_length is not reliable because of the shadow. Thus I use directly  the "Edges" of the track
             // XY_length = cam.trv_XY;                              
@@ -758,7 +759,7 @@ int main(int argc, char**argv) {
                 Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_cl_%i_trg_%i", cam.cluster, pmt.trg));
                 build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,
                     XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
-                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
+                    pmt.run, pmt.pic, pmt.trg, true, cam.fitSig*granularity);
             }
             //-----------  Variables for mixed analysis  -------------------------------//
 
@@ -869,7 +870,7 @@ int main(int argc, char**argv) {
     tree_3D->Write();
     file_root->Close();
 
-    // After adding the function to do PMT-analysis only for CAM-found alphas, cleaning the file is no longer (very) needed.\
+    // After adding the function to do PMT-analysis only for CAM-found alphas, cleaning the file is no longer (very) needed.
     // Like this, one can also cross-check why no matching occurred.
     // deleteNonAlphaDirectories(final_out.c_str());
 
