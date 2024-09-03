@@ -12,25 +12,27 @@
 
 void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dists, const std::vector<AlphaTrackPMT>& pmt_entries, const std::vector<AlphaTrackCAM>& cam_entries, bool verbose) {
 
-    std::vector<std::pair<double,double>> sing_point_dists;
+    std::vector<std::pair<double,double>> dists_CAM_BAT;
     double tot_avg_dist = 0;
 
     for (size_t i = 0; i < cam_entries.size(); ++i) {
         for (size_t j = 0; j < pmt_entries.size(); ++j) {
 
             tot_avg_dist = 0;
-            sing_point_dists.clear();
+            dists_CAM_BAT.clear();
 
-            calculate_distance(pmt_entries[j].track_pmt, cam_entries[i].track_cam, sing_point_dists, verbose);
+            calculate_distance(pmt_entries[j].track_pmt, cam_entries[i].track_cam, dists_CAM_BAT, verbose);
 
-            for ( const auto point : sing_point_dists ) {
+            for ( const auto dist : dists_CAM_BAT ) {
 
                 // Sum of *all* distances is X and Y
-                // The points are alreadu ordered by X
-                tot_avg_dist += std::sqrt( point.first * point.first + point.second * point.second);
+                // The dists had already been ordered by X
+                // dist.first = (x2 - x1); dist.second = (y2 - y1)
+                
+                tot_avg_dist += std::sqrt( dist.first * dist.first + dist.second * dist.second);
             } 
 
-            tot_avg_dist /= sing_point_dists.size();
+            tot_avg_dist /= dists_CAM_BAT.size();
 
             dists.emplace_back(tot_avg_dist, i, j);
         }
