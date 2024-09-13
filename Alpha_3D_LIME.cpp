@@ -31,15 +31,17 @@ int main(int argc, char**argv) {
 
     /* ****************************************  Running options   **************************************************************************  */
 
-    bool save_everything = true;    //opposite of saving *only* the alpha-tree
+    bool save_everything = false;    //opposite of saving *only* the alpha-tree
+    bool real_pic_plot = false;
+
+
+
+    /* ****************************************  Inputs and outputs   **************************************************************************  */
 
     string mode = argv[ 1 ]; // debug or full
     bool batch_mode;
     if (mode == "full") batch_mode = true;
     if (mode == "debug") batch_mode = false, save_everything = true;
-
-    /* ****************************************  Inputs and outputs   **************************************************************************  */
-
     if(batch_mode) gROOT->SetBatch(kTRUE);
 
     if (argc < 4) {
@@ -51,7 +53,7 @@ int main(int argc, char**argv) {
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
     
     string filename_cam = argv[ 2 ];
-    string filename_pmt = argv[ 2 ]; // For the cases where the PMT file is not the same as the camera file
+    string filename_pmt = argv[ 2 ]; //  Legacy ==> For the cases where the PMT file is not the same as the camera file, this can be changed.
 
     string outputfile = argv[ 3 ];
     string final_out; 
@@ -66,7 +68,6 @@ int main(int argc, char**argv) {
     // Use to create a canvas for the real picture with multiple events
     TCanvas *real_pic = new TCanvas("real_pic","real_pic",800,800);
     TH2F *real_pic_hist = new TH2F("real_pic_hist","real_pic_hist",2305,0,2305,2305,0,2305);
-    bool real_pic_plot = true;
 
     /* ****************************************  Definition of variables   **************************************************************************  */
 
@@ -265,11 +266,10 @@ int main(int argc, char**argv) {
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
                 angle_3D_reverse(angle_cam, points_cam);
 
-
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
 
-                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1;
+                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1; // Now, maybe we could use points_cam.middle(), but quadrant are not very relevant 
                 else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
                 else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
                 else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
@@ -358,7 +358,7 @@ int main(int argc, char**argv) {
 
         if ( pmt_sampling != 1024)                                    continue; 
         if ( mode == "debug" && pmt_event != debug_event )            continue;
-        if ( !found_clusters_in_evt(CAM_alphas, pmt_run, pmt_event) ) continue;
+        if ( !found_clusters_in_evt(CAM_alphas, pmt_run, pmt_event) ) continue;          // analyze only events where alphas were found in the sCMOS
 
         if ( pmt_channel == 1) cout << "\n\n\t==> PMT run: " << pmt_run << "; event: " << pmt_event << "; trigger: " << pmt_trigger << "; sampling: " << pmt_sampling << endl;
         if (save_everything) file_root->cd(Form("Run_%i_ev_%i", pmt_run, pmt_event));
@@ -402,7 +402,7 @@ int main(int argc, char**argv) {
         
         //-----------  Getting information for BAT  -------------------------------------------------------------------------//
 
-        sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end, true);
+        sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end, false);
 
         //-----------  Getting travelled Z  -----------//
         //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
@@ -460,7 +460,6 @@ int main(int argc, char**argv) {
 
                 direction = 0, dir_score = 0;
 
-
                 if (!skew_ratio.empty()) {
                     getDirectionScore(skew_ratio, direction, dir_score, false);
                 } else {
@@ -512,7 +511,7 @@ int main(int argc, char**argv) {
 
                     .energy = fitted_lum,
 
-                    .num_peaks = wf_Npeaks_ed/4 
+                    .num_peaks = wf_Npeaks_ed/4 //Should be "4. ? 
                 });
             }
 
@@ -743,14 +742,15 @@ int main(int argc, char**argv) {
             
             //----------- Verbose information  -----------//
 
-            cout << "\n  ** 3D Alpha track information: ** \n" << endl; 
-            cout << "--> Position, X: " << begin_X << "; Y: " << begin_Y  << endl;
-            cout << "--> Travelled XY: "    << XY_length   << endl;
-            cout << "--> Angle XY (#phi): "        << XY_angle << endl;
-            cout << "--> Travelled Z: "     << Z_length    << endl;
-            cout << "--> Direction in Z: "  << pmt_direction      << " at " << abs(pmt_direction_score) << " score" << endl;
-            cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
-            cout << "--> 3D alpha length (cm): " << full_length  << endl;
+            cout << "\n  ** 3D Alpha track information: ** \n"                  << endl; 
+            cout << "--> Position, X: "             << begin_X                  << "; Y: "  << begin_Y  << endl;
+            cout << "--> Travelled XY: "            << XY_length                << endl;
+            cout << "--> Angle XY (#phi): "         << XY_angle                 << endl;
+            cout << "--> Travelled Z: "             << Z_length                 << endl;
+            cout << "--> Direction in Z: "          << pmt_direction            << " at "   << pmt_direction_score << " score" << endl;
+            cout << "--> Angle Z (#theta): "        << Z_angle                  << endl;
+            cout << "--> Transv. prof. (cm): "      << cam.fitSig*granularity   << endl;
+            cout << "--> 3D alpha length (cm): "    << full_length              << endl;
             cout << endl;
             cout << "---------------------------------------------------" << endl;
 
@@ -759,7 +759,7 @@ int main(int argc, char**argv) {
                 Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_cl_%i_trg_%i", cam.cluster, pmt.trg));
                 build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,
                     XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
-                    pmt.run, pmt.pic, pmt.trg, true, cam.fitSig*granularity);
+                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
             }
             //-----------  Variables for mixed analysis  -------------------------------//
 
@@ -777,9 +777,7 @@ int main(int argc, char**argv) {
         
             tree_3D->Fill();
             distances.clear();
-
         }
-
     }
 
     /*
