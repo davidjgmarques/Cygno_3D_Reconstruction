@@ -154,7 +154,7 @@ void getSkewness_BraggPeak (const std::shared_ptr<std::vector<double>> &input_wf
             } 
         }
     
-        skewnesses.push_back( (double)( ((-1.)*peak1.second/peak2.second) + 1. ) );
+        skewnesses.push_back( (double)( ((+1.)*peak1.second/peak2.second) - 1. ) );
     }
     else if ( max_t >= TOT20_middle && max_t < TOT20_e ) {
         
@@ -170,7 +170,7 @@ void getSkewness_BraggPeak (const std::shared_ptr<std::vector<double>> &input_wf
             } 
         }
 
-        skewnesses.push_back( (double)( ((+1.)*peak2.second/peak1.second) - 1.) );
+        skewnesses.push_back( (double)( ((-1.)*peak2.second/peak1.second) + 1.) );
     }
 
     peaks.push_back(peak1);
