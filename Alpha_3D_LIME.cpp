@@ -567,6 +567,7 @@ int main(int argc, char**argv) {
     double cam_ymean;
     double cam_rms;
     double cam_tgausssigma;
+    double cam_t_prof_sigma;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
@@ -609,6 +610,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_ymean", &cam_ymean, "cam_ymean/D");
     tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
+    tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
     
     // Capture the current Git commit hash
     string git_commit_hash = exec("git rev-parse HEAD");
@@ -772,6 +774,7 @@ int main(int argc, char**argv) {
             cam_ymean = cam.ymean;
             cam_rms = cam.rms;
             cam_tgausssigma = cam.tgausssigma;
+            cam_t_prof_sigma = cam.fitSig*granularity;
 
             //-----------  Tree filling and variables cleaning  ----------//
         
