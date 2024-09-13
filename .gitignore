@@ -39,3 +39,4 @@ out/
 bat_files/
 examples/
 log
+*debug*.root
