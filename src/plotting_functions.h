@@ -6,7 +6,7 @@ void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, s
 
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title);
 
-void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult);
+void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save);
 
 void addTracks( TCanvas *image, TH2F *histo, TH2F* track, int fminx, int fminy, std::string nometh2);
 

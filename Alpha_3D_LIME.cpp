@@ -33,6 +33,7 @@ int main(int argc, char**argv) {
 
     bool save_everything = false;    //opposite of saving *only* the alpha-tree
     bool real_pic_plot = false;
+    bool v2 = true;
 
 
 
@@ -289,7 +290,7 @@ int main(int argc, char**argv) {
                     Track.PlotandSavetoFileDirectionalFull(Form("X_Y_Analyser_%s",name));
                     
                     TFitResultPtr fitResult; 
-                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult);     //"memory leak" because two TH2D are created with the same name.
+                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, true);     //"memory leak" because two TH2D are created with the same name.
                     
                     if (fitResult.Get()) {
                         fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
@@ -301,6 +302,22 @@ int main(int argc, char**argv) {
                     }
 
                     if (real_pic_plot) addTracks(real_pic, real_pic_hist, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Real_pic_hist_%s",name)); 
+                }
+
+                if (v2) {
+
+                    const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
+                    TFitResultPtr fitResult; 
+                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, false);     //"memory leak" because two TH2D are created with the same name.
+                    
+                    if (fitResult.Get()) {
+                        fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
+                        fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
+                        fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
+                        fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
+                    } else {
+                        fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0;
+                    }
                 }
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//

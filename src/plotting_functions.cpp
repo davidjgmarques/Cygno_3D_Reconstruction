@@ -88,7 +88,7 @@ void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, s
     c->Write(title.c_str());
 }
 
-void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult) {
+void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
 
     // Define the fitting function as a Gaussian plus a constant
     TF1* func = new TF1("fitFunc", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]", h1->GetXaxis()->GetXmin(), h1->GetXaxis()->GetXmax());
@@ -114,7 +114,7 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     h2->Draw();
     
     c_profiles->DrawClone();
-    c_profiles->Write(Form("Track_profiles_%s", title.c_str()));
+    if (save) c_profiles->Write(Form("Track_profiles_%s", title.c_str()));
     delete c_profiles;
 }
 
