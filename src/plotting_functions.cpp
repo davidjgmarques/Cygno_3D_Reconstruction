@@ -349,11 +349,11 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
 
     if (cloud) {
 
-        // Create and draw the points
         colorIndex = TColor::GetPalette();
         TRandom3 rand;
-        const int numGaussianPoints = 2000;
-        double gaus_sigma = sigma;  // Standard deviation for the Gaussian distribution
+        // const int numGaussianPoints = 2000;  //typical
+        const int numGaussianPoints = 200;  //for the gif
+        double gaus_sigma = sigma;
 
         for (int i = 0; i <= numSegments; ++i) {
             for (int j = 0; j < numGaussianPoints / numSegments; ++j) {
@@ -368,10 +368,9 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
                 TPolyMarker3D *point = new TPolyMarker3D(1);
                 point->SetPoint(0, px, py, pz);
 
-                // Set color based on gradient factor
                 point->SetMarkerColor(colorIndex.At(i * color_jumper));
-                point->SetMarkerStyle(20);  // Set marker style (e.g., 20 for a dot)
-                point->SetMarkerSize(0.5);  // Set marker size
+                point->SetMarkerStyle(20);  
+                point->SetMarkerSize(0.5);
                 point->Draw("same");
             }
         }
