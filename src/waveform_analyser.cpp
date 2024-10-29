@@ -299,3 +299,95 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
         std::cout << std::endl;
     }
 }
+
+bool checkCutOutTracks_TTT(Float_t ttt_time, double c_begin_Y, double c_end_Y, double granu, bool verb) {
+
+    if(verb) std::cout << "\n... Testing for TTT sensor cut ..." << std::endl;
+
+    bool cutted_frame = false;
+
+    double activeRow = 0;
+    double active_row_cm = 0;
+
+    // To ensure we consider the correct limits independently of the track direction
+    double active_range_low  = std::min(c_begin_Y, c_end_Y);
+    double active_range_high = std::max(c_begin_Y, c_end_Y);
+
+    // 2 mm window to mitigate mismatch between pixel rows and cm position due to granularity
+    double window_check = 0.2;
+
+    if (ttt_time > 184.4 && ttt_time < 300) {
+
+        active_row_cm = 36.;        // inside Global exposure
+        if (verb) std::cout << "--> This track is *NOT* cut by the sensor." << std::endl;
+
+    } else {
+        
+        std::cout << "--> This track *COULD* be cut, let's check..." << std::endl;
+
+        if      (ttt_time < 184.4)  activeRow = 2304.0 - (2304.0 * (ttt_time / 184.4));
+        else if (ttt_time > 300.0)  activeRow = 2304.0 - (2304.0 * ((ttt_time - 300.0) / 184.4));
+
+        active_row_cm = activeRow * granu;
+
+        if(verb) {
+            std::cout << "begin Y: "        << c_begin_Y         << std::endl;
+            std::cout << "end Y: "          << c_end_Y           << std::endl;
+            std::cout << "Track lowest Y: " << active_range_low << std::endl;
+            std::cout << "Track highest Y: " << active_range_high << std::endl;
+            std::cout << "Active row in cm: " << active_row_cm << std::endl;
+        }
+
+        if (active_row_cm > (active_range_low - window_check) && active_row_cm < (active_range_high + window_check)) {
+            
+            if (verb) std::cout << "--> This track *IS* cut by the sensor!" << std::endl;
+            cutted_frame = true;
+
+        } else {
+
+            if (verb) std::cout << "--> This track is *NOT* cut by the sensor!" << std::endl;
+            cutted_frame = false;
+        }
+    }
+
+    return cutted_frame;
+}
+
+bool checkCutOutTracks_NoisyBand(double c_begin_Y, double c_end_Y, double granu, bool verb) {
+
+    if(verb) std::cout << "\n... Testing for noisy band cut ..." << std::endl;
+
+    bool cutted_track = false;
+
+    // To ensure we consider the correct limits independently of the track direction
+    double active_range_low = std::min(c_begin_Y, c_end_Y);
+    double active_range_high = std::max(c_begin_Y, c_end_Y);
+
+    // 1 mm window to mitigate mismatch between pixel rows and cm position due to granularity
+    double window = 0.1; //millimiter
+
+    double noisy_Y_band_high    = (2304. - 304.) * granu - window;
+    double noisy_Y_band_low     = (0. + 250.)    * granu + window;
+
+    if(verb) {
+        std::cout << "begin Y: "        << c_begin_Y         << std::endl;
+        std::cout << "end Y: "          << c_end_Y           << std::endl;
+        std::cout << "Track lowest Y: " << active_range_low << std::endl;
+        std::cout << "Track highest Y: " << active_range_high << std::endl;
+        std::cout << "noisy band cut high - 1mm: " << noisy_Y_band_high << std::endl;
+        std::cout << "noisy band cut low + 1mm: " << noisy_Y_band_low << std::endl;
+    }
+
+    if (active_range_high > noisy_Y_band_high || active_range_low < noisy_Y_band_low) {
+
+        if(verb) std::cout << "--> This track *IS* cut by the noisy band cut in the reco." << std::endl;
+        cutted_track = true;
+
+    } else {
+
+        if(verb) std::cout << "--> This track is *NOT* cut by the noisy band cut in the reco." << std::endl;
+        cutted_track = false;
+    }
+
+    return cutted_track;
+}

@@ -34,6 +34,7 @@ struct AlphaTrackCAM {
 
     double fitSig;
     double calc_abs_Z;
+    bool cut_noisy_band; // temporary variable to check efficiency of the correction
 
 };
 

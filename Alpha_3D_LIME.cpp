@@ -136,6 +136,8 @@ int main(int argc, char**argv) {
     // double x_impact, y_impact;
     double xbar, ybar;
     double angle_cam;
+    double points_begin_Y, points_begin_X, points_end_Y, points_end_X;
+    bool cut_reco_noisy_band;
 
     // Profiles
     double fitAmp, fitMean, fitSigma, fitConst;
@@ -190,6 +192,7 @@ int main(int argc, char**argv) {
     int pmt_trigger;    tree_pmt->SetBranchAddress("pmt_wf_trigger",    &pmt_trigger);
     int pmt_channel;    tree_pmt->SetBranchAddress("pmt_wf_channel",    &pmt_channel);
     int pmt_sampling;   tree_pmt->SetBranchAddress("pmt_wf_sampling",   &pmt_sampling);
+    Float_t pmt_TTT;    tree_pmt->SetBranchAddress("pmt_wf_TTT",        &pmt_TTT);
 
     // Use this method to properly read the array since it's not a real vector and then otherwise reads wronmgly the addresses
     // The max length is 4000 (for slow). For reading the fast, I read just the first 1024 samples (the rest is "past memory")
@@ -265,8 +268,15 @@ int main(int argc, char**argv) {
                 //----------- Get important track parameters  -----------//
 
                 points_cam = Track.GetLinePoints(matching_slices,"edges");
+                points_begin_X = points_cam.front().first  * granularity;
+                points_begin_Y = points_cam.front().second * granularity;
+                points_end_X   = points_cam.back().first   * granularity;
+                points_end_Y   = points_cam.back().second  * granularity;
+
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
                 angle_3D_reverse(angle_cam, points_cam);
+
+                cut_reco_noisy_band = checkCutOutTracks_NoisyBand(points_begin_Y, points_end_Y, granularity, true);
 
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
@@ -322,10 +332,10 @@ int main(int argc, char**argv) {
 
                     .quad = quadrant_cam,
 
-                    .begin_X_cm = points_cam.front().first   * granularity,
-                    .begin_Y_cm = points_cam.front().second  * granularity,
-                    .end_X_cm   = points_cam.back().first   * granularity,
-                    .end_Y_cm   = points_cam.back().second  * granularity,
+                    .begin_X_cm = points_begin_X,
+                    .begin_Y_cm = points_begin_Y,
+                    .end_X_cm   = points_end_X,
+                    .end_Y_cm   = points_end_Y,
 
                     .its_alpha = cam_PID,
 
@@ -522,7 +532,7 @@ int main(int argc, char**argv) {
 
                     .energy = fitted_lum,
 
-                    .num_peaks = wf_Npeaks_ed/4 //Should be "4. ? 
+                    .TTT = pmt_TTT
                 });
             }
 
@@ -567,6 +577,7 @@ int main(int argc, char**argv) {
     bool cam_ParticleID, pmt_ParticleID;
     vector<pair<double,double>> distances;
     vector<tuple<double, size_t, size_t>> small_dist_assoc;
+    bool cut_ttt_sensor;
 
     // Remaining variables
     double pmt_energy;
@@ -580,6 +591,7 @@ int main(int argc, char**argv) {
     double cam_tgausssigma;
     double cam_t_prof_sigma;
     double cam_calc_abs_Z;
+    bool   cam_cutted_bool;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
@@ -611,6 +623,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_ParticleID", &cam_ParticleID, "cam_ParticleID/O");
     tree_3D->Branch("pmt_ParticleID", &pmt_ParticleID, "pmt_ParticleID/O");
     tree_3D->Branch("distances", &distances);
+    tree_3D->Branch("cut_ttt_sensor", &cut_ttt_sensor, "cut_ttt_sensor/B");
 
     // Remaining variables
     tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
@@ -624,6 +637,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
     tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
     tree_3D->Branch("cam_calc_abs_Z", &cam_calc_abs_Z, "cam_calc_abs_Z/D");
+    tree_3D->Branch("cam_cutted_bool", &cam_cutted_bool, "cam_cutted_bool/B");
     
     // Capture the current Git commit hash
     string git_commit_hash = exec("git rev-parse HEAD");
@@ -750,6 +764,7 @@ int main(int argc, char**argv) {
             cam_ParticleID = cam.its_alpha;
             pmt_ParticleID = pmt.its_alpha;
 
+            cut_ttt_sensor = checkCutOutTracks_TTT(pmt.TTT, begin_Y, track_end_Y, granularity, true);
 
             //-----------  Accuracy of BAT  -------------------------------//
 
@@ -766,6 +781,7 @@ int main(int argc, char**argv) {
             cout << "--> Angle Z (#theta): "        << Z_angle                  << endl;
             cout << "--> Transv. prof. (cm): "      << cam.fitSig*granularity   << endl;
             cout << "--> 3D alpha length (cm): "    << full_length              << endl;
+            cout << "--> WF TTT: "                  << pmt.TTT                  << endl;
             cout << endl;
             cout << "---------------------------------------------------" << endl;
 
@@ -789,6 +805,7 @@ int main(int argc, char**argv) {
             cam_tgausssigma = cam.tgausssigma;
             cam_t_prof_sigma = cam.fitSig*granularity;
             cam_calc_abs_Z = cam.calc_abs_Z;
+            cam_cutted_bool = cam.cut_noisy_band;
 
             //-----------  Tree filling and variables cleaning  ----------//
         

@@ -25,4 +25,8 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
 
 void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>>& peaks2, bool verbose = false);
 
+bool checkCutOutTracks_NoisyBand(double c_begin_Y, double c_end_Y, double granu, bool verb); 
+
+bool checkCutOutTracks_TTT(Float_t ttt_time, double c_begin_Y, double c_end_Y, double granu, bool verb);
+
 #endif
