@@ -69,6 +69,30 @@ void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &
     }
 }
 
+double estimate_absolute_Z(double sigma) {
+
+    // From Cygno Lemon paper, Z can be estimated from:
+    // Z = (sigma_measured^2 - sigma_0^2) / sigma_transverse^2
+    // Here the published values will be used.
+
+    // From Lemon paper
+    double sigma_zero = 292.0E-4;             //um->cm. cm/sqrt(cm)  
+    double sigma_transverse = 130.0E-4;       //um->cm. cm/sqrt(cm)
+    
+    // From Rita Roque's PhD thesis
+    // double sigma_zero = 500.0E-4;             //um->cm. cm/sqrt(cm)  
+    // double sigma_transverse = 110.0E-4;       //um->cm. cm/sqrt(cm)
+
+    double Z = 0;
+
+    if (sigma == 0) Z = -1;
+    else            Z = (pow(sigma,2) - pow(sigma_zero,2)) / pow(sigma_transverse,2); 
+
+    if (Z > 1E3) Z = -1;        //many fits don't work
+
+    return Z;    
+}
+
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
 
     std::cout << "Deleting non-alpha events from root file..." << std::endl;

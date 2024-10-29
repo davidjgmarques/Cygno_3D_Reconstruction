@@ -33,6 +33,7 @@ struct AlphaTrackCAM {
     double tgausssigma;
 
     double fitSig;
+    double calc_abs_Z;
 
 };
 
@@ -73,6 +74,8 @@ bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll);
 
 void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &points_cam);
+
+double estimate_absolute_Z(double sigma);
 
 int generate_random_direction();
 

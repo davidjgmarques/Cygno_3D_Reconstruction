@@ -140,6 +140,7 @@ int main(int argc, char**argv) {
     // Profiles
     double fitAmp, fitMean, fitSigma, fitConst;
     double fitAmpError, fitMeanError, fitSigmaError, fitConstError;
+    double fitQuality, calculated_Z;
 
     // PMT
     double fitted_lum;
@@ -306,19 +307,8 @@ int main(int argc, char**argv) {
 
                 if (v2) {
 
-                    const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
-                    TFitResultPtr fitResult; 
-                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, false);     //"memory leak" because two TH2D are created with the same name.
-                    
-                    if (fitResult.Get()) {
-                        fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
-                        fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
-                        fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
-                        fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
-                    } else {
-                        fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0;
-                    }
-                }
+                calculated_Z = estimate_absolute_Z(fitSigma*granularity);
+                cout << "\nEstimated Z was: " << calculated_Z << " cm." << endl;
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -349,7 +339,11 @@ int main(int argc, char**argv) {
                     .rms         = sc_rms[sc_i],
                     .tgausssigma = sc_tgausssigma[sc_i],
 
-                    .fitSig = fitSigma
+                    .fitSig = fitSigma,
+                    .calc_abs_Z = calculated_Z,
+                    .fit_qual = fitQuality,
+
+                    .cut_noisy_band = cut_reco_noisy_band
                 });      
 
                 //----------- Cleanup ----------------- -----------//
@@ -585,6 +579,7 @@ int main(int argc, char**argv) {
     double cam_rms;
     double cam_tgausssigma;
     double cam_t_prof_sigma;
+    double cam_calc_abs_Z;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
@@ -628,6 +623,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
     tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
+    tree_3D->Branch("cam_calc_abs_Z", &cam_calc_abs_Z, "cam_calc_abs_Z/D");
     
     // Capture the current Git commit hash
     string git_commit_hash = exec("git rev-parse HEAD");
@@ -792,6 +788,7 @@ int main(int argc, char**argv) {
             cam_rms = cam.rms;
             cam_tgausssigma = cam.tgausssigma;
             cam_t_prof_sigma = cam.fitSig*granularity;
+            cam_calc_abs_Z = cam.calc_abs_Z;
 
             //-----------  Tree filling and variables cleaning  ----------//
         
