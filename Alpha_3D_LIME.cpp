@@ -33,9 +33,6 @@ int main(int argc, char**argv) {
 
     bool save_everything = false;    //opposite of saving *only* the alpha-tree
     bool real_pic_plot = false;
-    bool v2 = true;
-
-
 
     /* ****************************************  Inputs and outputs   **************************************************************************  */
 
@@ -223,12 +220,6 @@ int main(int argc, char**argv) {
             cam_PID = false;
             cout << "\n\n\t==> Cam run: " << cam_run << "; event: " << cam_event << "; cluster ID: " << sc_i << "\n\n" << endl;
 
-            // if ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8)            //old cam cut
-            // && ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
-            // if ( sc_integral[sc_i]/sc_nhits[sc_i] > 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 50 ) {   //Alpha cut fropm Giorgio
-            // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 100 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
-            // if ( sc_integral[sc_i]/sc_nhits[sc_i] < 25 && sc_length[sc_i] > 10 && sc_width[sc_i] > 0 ) {   //Cosmics cut! (for thesis)
-
             if (checkCuts(sc_integral[sc_i], sc_nhits[sc_i], sc_length[sc_i], sc_width[sc_i], "alpha")) {
 
                 TString folderName = Form("Run_%i_ev_%i", cam_run, cam_event);
@@ -258,7 +249,6 @@ int main(int argc, char**argv) {
 
                 xbar = Track.GetXbar();
                 ybar = Track.GetYbar();
-
                 if (isnan(xbar) || isnan(ybar)) {
                     cout << "x_bar or y_bar is NaN. Skipping event..." << endl;
                     points_cam.clear();
@@ -286,14 +276,7 @@ int main(int argc, char**argv) {
                 else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
                 else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
 
-                //----------- Verbose information  -----------//
-
-                cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
-                cout << "\nTrack information: \n" << endl; 
-                cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
-                cout << "--> Quadrant: " << quadrant_cam << endl;
-                cout << "--> Angle: " << angle_cam << " degrees." << endl;
-                cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
+                //----------- Transverse profile fit  -----------//
 
                 if(save_everything) {
                     const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
@@ -319,6 +302,16 @@ int main(int argc, char**argv) {
 
                 calculated_Z = estimate_absolute_Z(fitSigma*granularity);
                 cout << "\nEstimated Z was: " << calculated_Z << " cm." << endl;
+
+                //----------- Verbose information  -----------//
+
+                cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
+                cout << "\nTrack information: \n" << endl; 
+                cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
+                cout << "--> Quadrant: " << quadrant_cam << endl;
+                cout << "--> Angle: " << angle_cam << " degrees." << endl;
+                cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
+
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
 
@@ -373,7 +366,7 @@ int main(int argc, char**argv) {
 
     vector<AlphaTrackPMT> PMT_alphas;
     Int_t nentries_pmt = (Int_t)tree_pmt->GetEntries();
-    for (Int_t pmt_wf = 0; pmt_wf < nentries_pmt; pmt_wf++) {  // Each entry is one waveform
+    for (Int_t pmt_wf = 0; pmt_wf < nentries_pmt; ++pmt_wf) {  // Each entry is one waveform
         
         tree_pmt->GetEntry(pmt_wf);
 
@@ -508,7 +501,7 @@ int main(int argc, char**argv) {
                 //----------- Run BAT routine ----------------------------//
 
                 fitted_lum = 0;
-                /* File naming a bit hardcoded here */
+                /* To fix: File naming a bit hardcoded here */
                 create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
                 run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
                 read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
@@ -531,6 +524,7 @@ int main(int argc, char**argv) {
                     .track_pmt = points_bat,
 
                     .energy = fitted_lum,
+                    .num_peaks = wf_Npeaks_ed/4, //Should be "4. ? 
 
                     .TTT = pmt_TTT
                 });
@@ -552,11 +546,10 @@ int main(int argc, char**argv) {
     }
     reco_data_pmt->Close();
 
+
     /* **************************************  COMBINED ANALYSIS  ********************************************************************  */
 
     cout << "\n\n************   COMBINED Analysis   ************\n\n" << endl;
-
-    /* ************* Combined information ********** */
 
     // General
     int run, picture, trigger;
@@ -649,8 +642,6 @@ int main(int argc, char**argv) {
     strncpy(git_commit_hash_cstr, git_commit_hash.c_str(), 40);
     git_commit_hash_cstr[40] = '\0'; // Ensure null-termination
     tree_3D->Branch("git_commit_hash", git_commit_hash_cstr, "git_commit_hash/C");
-
-///////////////////////////////////
 
     // To make the BAT association, I need to re-arrange some data because I'm saving the alphas individually as "entries"
     // So I now re-group the events per picture number in a map so that I can ASSOCIATE trigger and clusters in the same event.  
@@ -794,6 +785,7 @@ int main(int argc, char**argv) {
                     XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
                     pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
             }
+
             //-----------  Variables for mixed analysis  -------------------------------//
 
             pmt_energy = pmt.energy;
@@ -817,89 +809,7 @@ int main(int argc, char**argv) {
         }
     }
 
-    /*
-    // for (const auto& cam : CAM_alphas) {
-
-        // for (const auto& pmt : PMT_alphas) {
-        
-            if ( pmt.run == cam.run && pmt.pic == cam.pic) {
-
-                if (pmt.quad == cam.quad ) {         //quad selection is too sensitive to alphas in the center    
-                    if ( pmt.its_alpha == true && cam.its_alpha == true) {
-
-                        run = cam.run; picture = cam.pic; trigger = pmt.trg;
-
-                        cout << Form("\n\n ==> Matched alpha in run %i, event %i, trigger %i, quadrant %i, with Alpha-PID = %i", cam.run, cam.pic, pmt.trg, pmt.quad, pmt.its_alpha) << endl;
-                        
-                        //----------- Creating 3D alpha track information  -----------//
-
-                        begin_X = cam.begin_X_cm;
-                        begin_Y = cam.begin_Y_cm;               
-                        begin_Z = 25.0;                          // Absolute Z fixed.
-
-                        track_end_X = begin_X + ( cam.trv_XY * cos(cam.angle_XY * TMath::Pi()/180.));
-                        track_end_Y = begin_Y + ( cam.trv_XY * sin(cam.angle_XY * TMath::Pi()/180.));
-                        track_end_Z = begin_Z + ( pmt.trv_Z  * pmt.dir);                               // if dir = 0, track doesn't show Z direction
-
-                        Z_angle = atan(pmt.trv_Z/cam.trv_XY) * 180. / TMath::Pi();
-                        XY_angle = cam.angle_XY;
-
-                        Z_length = pmt.trv_Z;
-                        XY_length = cam.trv_XY;
-                        full_length = TMath::Sqrt(pow(cam.trv_XY,2) + pow(pmt.trv_Z,2));
-
-                        pmt_direction = pmt.dir;
-                        pmt_direction_score = pmt.prob;
-
-                        cam_quad = cam.quad;
-                        pmt_quad = pmt.quad;
-
-                        cam_ParticleID = cam.its_alpha;
-                        pmt_ParticleID = pmt.its_alpha;
-
-
-                        //-----------  Accuracy of BAT  -------------------------------//
-
-                        calculate_distance(pmt.track_pmt, cam.track_cam, distances, true);
-                        
-                        //----------- Verbose information  -----------//
-
-                        cout << "\n\t ** 3D Alpha track information: ** \n" << endl; 
-                        cout << "--> Position, X: " << begin_X << "; Y: " << begin_Y  << endl;
-                        cout << "--> Travelled XY: "    << XY_length   << endl;
-                        cout << "--> Angle XY (#phi): "        << XY_angle << endl;
-                        cout << "--> Travelled Z: "     << Z_length    << endl;
-                        cout << "--> Direction in Z: "  << pmt_direction      << " at " << abs(pmt_direction_score) << " score" << endl;
-                        cout << "--> Angle Z (#theta): "     << Z_angle  << endl;
-                        cout << "--> 3D alpha length (cm): " << full_length  << endl;
-
-                        if(save_everything){
-                            file_root->cd(Form("Run_%i_ev_%i", cam.run, cam.pic));
-                            build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,cam.trv_XY, cam.angle_XY, pmt.trv_Z, pmt.dir, pmt.prob, Z_angle, full_length, pmt.run, pmt.pic, pmt.trg);
-                        }
-                        //-----------  Variables for mixed analysis  -------------------------------//
-
-                        pmt_energy = pmt.energy;
-                        cam_energy = cam.energy;
-                        cam_nhits = cam.nhits;
-                        cam_width = cam.width;
-                        cam_xmean = cam.xmean;
-                        cam_ymean = cam.ymean;
-                        cam_rms = cam.rms;
-                        cam_tgausssigma = cam.tgausssigma;
-
-                        //-----------  Tree filling and variables cleaning  ----------//
-                    
-                        tree_3D->Fill();
-                        distances.clear();
-
-                    } else continue;
-                } else continue; // quad
-            } else continue;
-        } // close for pmt
-    } // close for cam
-    */
-
+    //-----------  Saving the tree  ----------//
 
     file_root->cd();
     tree_3D->Write();
