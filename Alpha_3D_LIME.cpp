@@ -300,22 +300,22 @@ int main(int argc, char**argv) {
                     Track.PlotandSavetoFileCOLZ_fullSize(Form("Track_%s",name));     
                     Track.PlotandSavetoFileDirectionalFull(Form("X_Y_Analyser_%s",name));
                     
-                    TFitResultPtr fitResult; 
-                    printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, true);     //"memory leak" because two TH2D are created with the same name.
-                    
-                    if (fitResult.Get()) {
-                        fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
-                        fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
-                        fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
-                        fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
-                    } else {
-                        fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0;
-                    }
-
                     if (real_pic_plot) addTracks(real_pic, real_pic_hist, Track.GetHistoTrack(), Track.Getfxmin(), Track.Getfymin(), Form("Real_pic_hist_%s",name)); 
                 }
 
-                if (v2) {
+                const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
+                TFitResultPtr fitResult; 
+                printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, save_everything);
+                
+                if (fitResult.Get()) {
+                    fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
+                    fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
+                    fitSigma = fitResult->Parameter(2), fitSigmaError = fitResult->ParError(2);
+                    fitConst = fitResult->Parameter(3), fitConstError = fitResult->ParError(3);
+                    fitQuality = fitResult->Chi2() / fitResult->Ndf();
+                } else {
+                    fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0, fitQuality = 0;
+                }
 
                 calculated_Z = estimate_absolute_Z(fitSigma*granularity);
                 cout << "\nEstimated Z was: " << calculated_Z << " cm." << endl;
@@ -591,6 +591,7 @@ int main(int argc, char**argv) {
     double cam_tgausssigma;
     double cam_t_prof_sigma;
     double cam_calc_abs_Z;
+    double cam_fit_quality;
     bool   cam_cutted_bool;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
@@ -637,6 +638,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
     tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
     tree_3D->Branch("cam_calc_abs_Z", &cam_calc_abs_Z, "cam_calc_abs_Z/D");
+    tree_3D->Branch("cam_fit_quality", &cam_fit_quality, "cam_fit_quality/D");
     tree_3D->Branch("cam_cutted_bool", &cam_cutted_bool, "cam_cutted_bool/B");
     
     // Capture the current Git commit hash
@@ -805,6 +807,7 @@ int main(int argc, char**argv) {
             cam_tgausssigma = cam.tgausssigma;
             cam_t_prof_sigma = cam.fitSig*granularity;
             cam_calc_abs_Z = cam.calc_abs_Z;
+            cam_fit_quality = cam.fit_qual;
             cam_cutted_bool = cam.cut_noisy_band;
 
             //-----------  Tree filling and variables cleaning  ----------//

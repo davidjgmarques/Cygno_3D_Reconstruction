@@ -34,6 +34,8 @@ struct AlphaTrackCAM {
 
     double fitSig;
     double calc_abs_Z;
+    double fit_qual;
+
     bool cut_noisy_band; // temporary variable to check efficiency of the correction
 
 };
@@ -54,8 +56,8 @@ struct AlphaTrackPMT {
     std::vector<std::pair<double,double>> track_pmt;
 
     double energy;
-
     double num_peaks;
+    Float_t TTT;
 };
 
 // This structure is later useful to group the alpha by {run,event}
