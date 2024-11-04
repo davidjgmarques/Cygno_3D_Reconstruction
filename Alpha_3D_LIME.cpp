@@ -263,9 +263,6 @@ int main(int argc, char**argv) {
                 points_end_X   = points_cam.back().first   * granularity;
                 points_end_Y   = points_cam.back().second  * granularity;
 
-                angle_cam = Track.GetDir()/TMath::Pi()*180.;
-                angle_3D_reverse(angle_cam, points_cam);
-
                 cut_reco_noisy_band = checkCutOutTracks_NoisyBand(points_begin_Y, points_end_Y, granularity, false);
 
                 // x_impact = Track.GetXIP() * granularity;
