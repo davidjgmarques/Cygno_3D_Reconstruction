@@ -271,7 +271,7 @@ int main(int argc, char**argv) {
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
 
-                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1; // Now, maybe we could use points_cam.middle(), but quadrant are not very relevant 
+                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1; /* To fix: Now, maybe we could use points_cam.middle(), but quadrant are not very relevant */ 
                 else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
                 else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
                 else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
@@ -299,15 +299,6 @@ int main(int argc, char**argv) {
                 } else {
                     fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0, fitQuality = 0;
                 }
-
-                if (true) {
-                    // cout << "Fit Results:"  << endl;
-                    // cout << "Amplitude: "   << fitAmp   << " ± " << fitAmpError     << endl;
-                    // cout << "Mean: "        << fitMean  << " ± " << fitMeanError    << endl;
-                    // cout << "Sigma: "       << fitSigma << " ± " << fitSigmaError   << endl;
-                    // cout << "Constant: "    << fitConst << " ± " << fitConstError   << endl;
-                    cout << " Transverse prof. fit Quality (Chi2/Ndf): "  << fitQuality << endl;
-                }
                 
                 calculated_Z = estimate_absolute_Z(fitSigma*granularity);
 
@@ -316,6 +307,7 @@ int main(int argc, char**argv) {
                 cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
                 cout << "\nTrack information: \n" << endl; 
                 cout << "--> Estimated Z was: " << calculated_Z << " cm." << endl;
+                cout << "--> Transverse prof. fit Quality (Chi2/Ndf): "  << fitQuality << endl;
                 cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
                 cout << "--> Quadrant: " << quadrant_cam << endl;
                 cout << "--> Angle: " << angle_cam << " degrees." << endl;
