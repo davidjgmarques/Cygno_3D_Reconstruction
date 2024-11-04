@@ -266,7 +266,7 @@ int main(int argc, char**argv) {
                 angle_cam = Track.GetDir()/TMath::Pi()*180.;
                 angle_3D_reverse(angle_cam, points_cam);
 
-                cut_reco_noisy_band = checkCutOutTracks_NoisyBand(points_begin_Y, points_end_Y, granularity, true);
+                cut_reco_noisy_band = checkCutOutTracks_NoisyBand(points_begin_Y, points_end_Y, granularity, false);
 
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
@@ -300,13 +300,22 @@ int main(int argc, char**argv) {
                     fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0, fitQuality = 0;
                 }
 
+                if (true) {
+                    // cout << "Fit Results:"  << endl;
+                    // cout << "Amplitude: "   << fitAmp   << " ± " << fitAmpError     << endl;
+                    // cout << "Mean: "        << fitMean  << " ± " << fitMeanError    << endl;
+                    // cout << "Sigma: "       << fitSigma << " ± " << fitSigmaError   << endl;
+                    // cout << "Constant: "    << fitConst << " ± " << fitConstError   << endl;
+                    cout << " Transverse prof. fit Quality (Chi2/Ndf): "  << fitQuality << endl;
+                }
+                
                 calculated_Z = estimate_absolute_Z(fitSigma*granularity);
-                cout << "\nEstimated Z was: " << calculated_Z << " cm." << endl;
 
                 //----------- Verbose information  -----------//
 
                 cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
                 cout << "\nTrack information: \n" << endl; 
+                cout << "--> Estimated Z was: " << calculated_Z << " cm." << endl;
                 cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
                 cout << "--> Quadrant: " << quadrant_cam << endl;
                 cout << "--> Angle: " << angle_cam << " degrees." << endl;
@@ -524,7 +533,7 @@ int main(int argc, char**argv) {
                     .track_pmt = points_bat,
 
                     .energy = fitted_lum,
-                    .num_peaks = wf_Npeaks_ed/4, //Should be "4. ? 
+                    .num_peaks = wf_Npeaks_ed/4, /* To fix: this should be "4." --> Check if it makes a difference */ 
 
                     .TTT = pmt_TTT
                 });
