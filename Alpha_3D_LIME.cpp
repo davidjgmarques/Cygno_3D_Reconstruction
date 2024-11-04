@@ -258,6 +258,11 @@ int main(int argc, char**argv) {
                 //----------- Get important track parameters  -----------//
 
                 points_cam = Track.GetLinePoints(matching_slices,"edges");
+
+                /* Points reverse for plotting purposes <only> */
+                angle_cam = Track.GetDir()/TMath::Pi()*180.;
+                angle_3D_reverse(angle_cam, points_cam);
+
                 points_begin_X = points_cam.front().first  * granularity;
                 points_begin_Y = points_cam.front().second * granularity;
                 points_end_X   = points_cam.back().first   * granularity;
