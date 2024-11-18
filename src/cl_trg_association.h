@@ -36,7 +36,9 @@ struct AlphaTrackCAM {
     double calc_abs_Z;
     double fit_qual;
 
-    bool cut_noisy_band; // temporary variable to check efficiency of the correction
+    /* To fix: temporary variable to check efficiency of the correction
+    Cutted events should be automatically discarded */
+    bool cut_noisy_band; 
 
 };
 

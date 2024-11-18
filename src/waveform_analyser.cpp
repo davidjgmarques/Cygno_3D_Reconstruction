@@ -56,8 +56,8 @@ void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_d
         if ( ( (*input_wf)[p] < (max * t30_div) ) && t30_b != 0 && t30_e == 0 && ( (time[p] - t30_b) > 10) )   t30_e   = time[p];
     }
     
-    if (t20_e == 0) t20_e = 1024;
-    if (t30_e == 0) t30_e = 1024;
+    if (t20_e == 0) t20_e = 1024;           /* To fix: Flag to fix the case where the waveform is saturated in time. (Although its rare) */   
+    if (t30_e == 0) t30_e = 1024;           /* To fix: Flag to fix the case where the waveform is saturated in time. (Although its rare) */
 }
 
 void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf, 

@@ -77,7 +77,6 @@ int main(int argc, char**argv) {
     // -----------------  Analyzer constants  ----------------- //
 
     // For alphas (David)
-    // Int_t NPIP=3000; Float_t wFac=3.5;
     Int_t NPIP=2500; Float_t wFac=3.5;
     
     // For ER (original from Samuele)
