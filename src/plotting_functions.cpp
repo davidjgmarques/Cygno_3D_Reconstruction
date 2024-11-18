@@ -12,6 +12,7 @@
 #include "TPolyLine3D.h"
 #include "TPolyMarker3D.h"
 #include "TRandom3.h"
+#include "TPaveStats.h"
 
 #include "plotting_functions.h"
 
@@ -98,9 +99,11 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     func->SetParName(2, "Sigma");
     func->SetParName(3, "Constant");
 
-    fitResult = h1->Fit(func, "RNSQ");
+    // fitResult = h1->Fit(func, "RNSQ");
+    // fitResult = h1->Fit(func, "RNS");
+    fitResult = h1->Fit(func, "RNSE");
 
-    TCanvas* c_profiles = new TCanvas("c_profiles","c_profiles",1000,500); 
+    TCanvas* c_profiles = new TCanvas("c_profiles","c_profiles",1000,800); 
     c_profiles->cd();
     c_profiles->Divide(1,2);
 
@@ -108,6 +111,23 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     h1->SetTitle("Transversal Profile");
     h1->Draw();
     func->Draw("same");
+
+    TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
+    pt->SetFillColor(0);
+    pt->SetTextAlign(12); // Align text to the left
+    pt->SetBorderSize(1); // Set border size to 1
+    pt->SetShadowColor(0); // Remove shadow
+    pt->SetTextFont(42); // Use a plain font
+    
+    pt->AddText(Form("Entries   = %.0f", h1->GetEntries()));
+    pt->AddText(Form("#chi^{2} / ndf = %.2f / %d", func->GetChisquare(),  func->GetNDF()));
+    pt->AddText(Form("C      = %.2f +/- %.2f",  func->GetParameter(0), func->GetParError(0)));
+    pt->AddText(Form("#mu      = %.2f +/- %.2f",  func->GetParameter(1), func->GetParError(1)));
+    pt->AddText(Form("#sigma     = %.2f +/- %.2f",  func->GetParameter(2), func->GetParError(2)));
+    pt->AddText(Form("Baseline  = %.2f +/- %.2f",  func->GetParameter(3), func->GetParError(3)));
+    pt->SetOptStat(1110);
+    pt->SetOptFit(1110);
+    pt->Draw();
 
     c_profiles->cd(2); 
     h2->SetTitle("Longitudinal Profile"); 
