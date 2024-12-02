@@ -138,6 +138,126 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     delete c_profiles;
 }
 
+/*
+void doubleGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
+
+    // int binmax = TransProfile_b->GetMaximumBin();
+    // --> float center_b = TransProfile_b->GetXaxis()->GetBinCenter(binmax);
+    // --> float std_b = TransProfile_b->GetRMS();
+    // --> TF1* TransProfGauss_b = new TF1("TransProfGauss_b","gaus(0) + gaus(3)",0,TransProfile_b->GetNbinsX()-1);
+    // --> TransProfGauss_b->SetParameters(1000, center_b,std_b, 100, 0, 10);
+    // --> TransProfGauss_b->SetParameters(1000, center_b,std_b, 50, 0, 10);
+    // --> TransProfGauss_b->SetParLimits(1,center_b-0.5,center_b+0.5);
+    // --> TransProfile_b->Fit("TransProfGauss_b","QR","",center_b-3*std_b, center_b+3*std_b);}
+
+    // TF1* dbGau = new TF1("dbGau", "[0]+ gaus(1)+gaus(4)", 0, h1->GetNbinsX()-1);
+    TF1* dbGau = new TF1("dbGau", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]*exp(-0.5*((x-[4])/[5])^2) + [6]", 0, h1->GetNbinsX()-1);
+    dbGau->SetParameters(1000, h1->GetMean(),h1->GetRMS(),
+                        100, 0, 10, 0);
+    dbGau->SetParLimits(1,h1->GetMean()-0.5,h1->GetMean()+0.5);
+    dbGau->SetParName(0, "Amplitude 1");
+    dbGau->SetParName(1, "Mean 1");
+    dbGau->SetParName(2, "Sigma 1");
+    dbGau->SetParName(3, "Amplitude 2");
+    dbGau->SetParName(4, "Mean 2");
+    dbGau->SetParName(5, "Sigma 2");
+    dbGau->SetParName(6, "Baseline");
+
+    // dbGau = h1->Fit(dbGau, "RNSE");
+    h1->Fit(dbGau, "RNSE");
+
+    TCanvas* c_dbGau = new TCanvas("c_dbGau","c_dbGau",1000,800); 
+    c_dbGau->cd();
+
+    h1->SetTitle("Transversal double Gaus Profile");
+    h1->Draw();
+    dbGau->Draw("same");
+
+    TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
+    pt->SetFillColor(0);
+    pt->SetTextAlign(12); // Align text to the left
+    pt->SetBorderSize(1); // Set border size to 1
+    pt->SetShadowColor(0); // Remove shadow
+    pt->SetTextFont(42); // Use a plain font
+    
+    pt->AddText(Form("Entries             = %.0f", h1->GetEntries()));
+    pt->AddText(Form("#chi^{2} / ndf      = %.2f / %d",      dbGau->GetChisquare(),  dbGau->GetNDF()));
+    pt->AddText(Form("C1                  = %.2f +/- %.2f",  dbGau->GetParameter(0), dbGau->GetParError(0)));
+    pt->AddText(Form("#mu 1               = %.2f +/- %.2f",  dbGau->GetParameter(1), dbGau->GetParError(1)));
+    pt->AddText(Form("#sigma 1            = %.2f +/- %.2f",  dbGau->GetParameter(2), dbGau->GetParError(2)));
+    pt->AddText(Form("C2                  = %.2f +/- %.2f",  dbGau->GetParameter(3), dbGau->GetParError(3)));
+    pt->AddText(Form("#mu 2               = %.2f +/- %.2f",  dbGau->GetParameter(4), dbGau->GetParError(4)));
+    pt->AddText(Form("#sigma 2            = %.2f +/- %.2f",  dbGau->GetParameter(5), dbGau->GetParError(5)));
+    pt->AddText(Form("Baseline            = %.2f +/- %.2f",  dbGau->GetParameter(6), dbGau->GetParError(6)));
+    pt->SetOptStat(1110);
+    pt->SetOptFit(1110);
+    pt->Draw();
+
+    c_dbGau->DrawClone();
+    if (save) c_dbGau->Write(Form("Track_doubleGaus_%s", title.c_str()));
+    delete c_dbGau;
+}
+*/
+
+/* 
+void centralGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
+
+    int binmax = h1->GetMaximumBin();
+    float center_b = h1->GetXaxis()->GetBinCenter(binmax);
+    float std_b = h1->GetRMS();
+
+    // Ensure the fit is performed within the specified range
+    double fitRangeMin = center_b - 0.5 * std_b;
+    double fitRangeMax = center_b + 0.5 * std_b;
+    std::cout << "Fit range: [" << fitRangeMin << ", " << fitRangeMax << "]" << std::endl;
+    
+    // TF1* centralGau = new TF1("centralGau", "[0]*exp(-0.5*((x-[1])/[2])^2)", 0, h1->GetNbinsX()-1);
+    TF1* centralGau = new TF1("centralGau", "[0]*exp(-0.5*((x-[1])/[2])^2)");
+    centralGau->SetParameters(1000, h1->GetMean(),h1->GetRMS());
+    // dbGau->SetParLimits(1,h1->GetMean()-0.5,h1->GetMean()+0.5);
+    centralGau->SetParName(0, "Amplitude 1");
+    centralGau->SetParName(1, "Mean 1");
+    centralGau->SetParName(2, "Sigma 1");
+
+    fitResult = h1->Fit(centralGau, "RS", "", fitRangeMin, fitRangeMax);
+
+    TCanvas* c_centralGau = new TCanvas("c_centralGau","c_centralGau",1000,800); 
+    c_centralGau->cd();
+
+    h1->SetTitle("Transversal double Gaus Profile");
+    h1->Draw();
+    centralGau->Draw("same");
+
+    TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
+    pt->SetFillColor(0);
+    pt->SetTextAlign(12); // Align text to the left
+    pt->SetBorderSize(1); // Set border size to 1
+    pt->SetShadowColor(0); // Remove shadow
+    pt->SetTextFont(42); // Use a plain font
+    
+    pt->AddText(Form("Entries             = %.0f", h1->GetEntries()));
+    pt->AddText(Form("#chi^{2} / ndf      = %.2f / %d",      centralGau->GetChisquare(),  centralGau->GetNDF()));
+    pt->AddText(Form("C1                  = %.2f +/- %.2f",  centralGau->GetParameter(0), centralGau->GetParError(0)));
+    pt->AddText(Form("#mu 1               = %.2f +/- %.2f",  centralGau->GetParameter(1), centralGau->GetParError(1)));
+    pt->AddText(Form("#sigma 1            = %.2f +/- %.2f",  centralGau->GetParameter(2), centralGau->GetParError(2)));
+    pt->SetOptStat(1110);
+    pt->SetOptFit(1110);
+    pt->Draw();
+
+    c_centralGau->DrawClone();
+    if (save) c_centralGau->Write(Form("Track_centralGaus_%s", title.c_str()));
+    delete c_centralGau;
+} 
+*/
+
+double getHistogramRMS(TH1D* histo) {
+    if (!histo) {
+        std::cerr << "Error: Null histogram pointer provided." << std::endl;
+        return -1;
+    }
+    return histo->GetRMS();
+}
+
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
     
     TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 800);

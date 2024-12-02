@@ -8,6 +8,10 @@ void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector
 
 void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save);
 
+void doubleGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save);
+
+void centralGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save);
+
 void addTracks( TCanvas *image, TH2F *histo, TH2F* track, int fminx, int fminy, std::string nometh2);
 
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
