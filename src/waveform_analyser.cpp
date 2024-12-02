@@ -182,7 +182,6 @@ void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prom
     int n = input_wf->size();
     TSpectrum spectrum;
     double sigma = 20; // Width of the peaks
-    // int window_size = 20; // Window size to search for local minima
     int window_size = 50; // Window size to search for local minima
 
     // Create a histogram from the input waveform

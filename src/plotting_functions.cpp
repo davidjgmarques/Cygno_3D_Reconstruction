@@ -91,16 +91,14 @@ void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, s
 
 void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
 
-    // Define the fitting function as a Gaussian plus a constant
     TF1* func = new TF1("fitFunc", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]", h1->GetXaxis()->GetXmin(), h1->GetXaxis()->GetXmax());
-    func->SetParameters(1, h1->GetMean(), h1->GetRMS(), 0); // Initial parameters: amplitude, mean, sigma, constant
+    func->SetParameters(1, h1->GetMean(), h1->GetRMS(), 0); 
     func->SetParName(0, "Amplitude");
     func->SetParName(1, "Mean");
     func->SetParName(2, "Sigma");
     func->SetParName(3, "Constant");
 
     // fitResult = h1->Fit(func, "RNSQ");
-    // fitResult = h1->Fit(func, "RNS");
     fitResult = h1->Fit(func, "RNSE");
 
     TCanvas* c_profiles = new TCanvas("c_profiles","c_profiles",1000,800); 
@@ -114,17 +112,17 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
 
     TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
     pt->SetFillColor(0);
-    pt->SetTextAlign(12); // Align text to the left
-    pt->SetBorderSize(1); // Set border size to 1
-    pt->SetShadowColor(0); // Remove shadow
-    pt->SetTextFont(42); // Use a plain font
-    
-    pt->AddText(Form("Entries   = %.0f", h1->GetEntries()));
-    pt->AddText(Form("#chi^{2} / ndf = %.2f / %d", func->GetChisquare(),  func->GetNDF()));
-    pt->AddText(Form("C      = %.2f +/- %.2f",  func->GetParameter(0), func->GetParError(0)));
-    pt->AddText(Form("#mu      = %.2f +/- %.2f",  func->GetParameter(1), func->GetParError(1)));
-    pt->AddText(Form("#sigma     = %.2f +/- %.2f",  func->GetParameter(2), func->GetParError(2)));
-    pt->AddText(Form("Baseline  = %.2f +/- %.2f",  func->GetParameter(3), func->GetParError(3)));
+    pt->SetTextAlign(12); 
+    pt->SetBorderSize(1); 
+    pt->SetShadowColor(0);
+    pt->SetTextFont(42);
+
+    pt->AddText(Form("Entries        = %.0f", h1->GetEntries()));
+    pt->AddText(Form("#chi^{2} / ndf = %.2f / %d",      func->GetChisquare(),  func->GetNDF()));
+    pt->AddText(Form("C              = %.2f +/- %.2f",  func->GetParameter(0), func->GetParError(0)));
+    pt->AddText(Form("#mu            = %.2f +/- %.2f",  func->GetParameter(1), func->GetParError(1)));
+    pt->AddText(Form("#sigma         = %.2f +/- %.2f",  func->GetParameter(2), func->GetParError(2)));
+    pt->AddText(Form("Baseline       = %.2f +/- %.2f",  func->GetParameter(3), func->GetParError(3)));
     pt->SetOptStat(1110);
     pt->SetOptFit(1110);
     pt->Draw();
@@ -532,104 +530,3 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     c_3D->Write();
     delete c_3D;
 } 
-
-
-
-////////////////////////////// Older plotting functions ////////////////////////////////
-/*
-void print_histogram(TH1F *histo, std::string title, std::string x_axis, std::string y_axis){
-
-    TCanvas *c = new TCanvas("","", 800, 500);
-    c->cd();
-    histo->SetTitle(title.c_str());
-    histo->SetLineColor(kAzure-5);
-    histo->SetLineWidth(1);
-    histo->SetFillStyle(3003);
-    histo->SetFillColor(kAzure+5);
-    histo->GetYaxis()->SetTitle(y_axis.c_str());
-    histo->GetYaxis()->SetTitleOffset(1.0);
-    histo->GetYaxis()->SetTitleSize(0.045);
-    histo->GetXaxis()->SetTitleOffset(1.0);
-    histo->GetXaxis()->SetTitleSize(0.045);
-    histo->GetXaxis()->SetTitle(x_axis.c_str());
-    histo->Draw("hist");
-    // histo->Write();
-}
-
-void print_graph_simple(TGraph *graph, std::string title, std::string x_axis, std::string y_axis){ //}, double yMin, double yMax){
-
-    TCanvas *c = new TCanvas("","", 800, 500);
-    c->cd();
-    graph->SetTitle(title.c_str());
-    graph->GetXaxis()->SetTitle(x_axis.c_str());
-    graph->GetXaxis()->SetTitleSize(0.045);
-    graph->GetXaxis()->SetTitleOffset(1);
-    graph->GetYaxis()->SetTitle(y_axis.c_str());
-    graph->GetYaxis()->SetTitleSize(0.045);
-    graph->GetYaxis()->SetTitleOffset(1);
-    graph->SetLineColor(kAzure-5);
-    graph->SetMarkerColor(kAzure-5);
-    // graph->SetMarkerStyle(2);
-    // graph->GetYaxis()->SetRangeUser(0,2304);
-    // graph->GetXaxis()->SetLimits(0,2304);
-    graph->Draw("al");
-} 
-
-void create_and_print_wf_graph_simple (std::string filename, std::vector<int> time, shared_ptr<std::vector<double>> ampl, std::string tag) {
-
-    TGraph *gWaveform = new TGraph();
-    std::string newname = filename + "_" + tag;
-
-    for (int k = 0; k < time.size(); k++){
-
-        gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
-    }
-    print_graph_simple(gWaveform, newname, "t [ms]", "Amplitude [mV]");
-    gWaveform->SetName(newname.c_str());
-    // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
-}
-
-void create_and_print_wf_graph_lines (std::string filename, std::vector<int> time, shared_ptr<std::vector<double>> ampl, double start, double end, double level) {
-
-    TGraph *gWaveform = new TGraph();
-    std::string newname = filename + "";
-
-    TLine * line1 = new TLine(start,level,end,level);
-
-    for (int k = 0; k < time.size(); k++){
-
-        gWaveform -> SetPoint ( k, time[k], (*ampl)[k]);
-    }
-    print_graph_lines(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1);
-    
-    // I need to save the canvas to also print the lines
-    // gWaveform->SetName(newname.c_str());
-    // gWaveform->Write(newname.c_str(),TObject::kWriteDelete);
-}
-
-void print_graph_lines (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1){
-
-    TCanvas *c = new TCanvas("","", 800, 600);
-    c->cd();
-    graph->SetTitle(title.c_str());
-    graph->GetXaxis()->SetTitle(x_axis.c_str());
-    graph->GetXaxis()->SetTitleSize(0.045);
-    graph->GetXaxis()->SetTitleOffset(1);
-    graph->GetYaxis()->SetTitle(y_axis.c_str());
-    graph->GetYaxis()->SetTitleSize(0.045);
-    graph->GetYaxis()->SetTitleOffset(1);
-    graph->SetLineColor(kAzure-5);
-    graph->SetLineWidth(2);
-    graph->SetMarkerColor(kAzure-5);
-    // graph->GetYaxis()->SetRangeUser(yMin,yMax);
-    graph->Draw("apl");
-
-    l1->SetLineColor(kRed-4);
-    l1->SetLineWidth(3);
-    l1->SetLineStyle(1);
-    l1->Draw("same");
-
-    c->SetName(title.c_str());
-    c->Write(title.c_str(),TObject::kWriteDelete);
-} 
-*/

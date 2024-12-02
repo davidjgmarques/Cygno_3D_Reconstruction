@@ -237,10 +237,9 @@ int main(int argc, char**argv) {
                 Track.SetWScal(wFac);
                 Track.SetNPIP(NPIP);
                 Track.ApplyThr();
-                // // Track.RemoveNoise(25); //iron
-                // Track.RemoveNoise(25); //cosmics
-                // Track.RemoveNoise(75);
-                Track.RemoveNoise(100); //alphas
+                // Track.RemoveNoise(25);       //iron
+                // Track.RemoveNoise(50);       //cosmics
+                Track.RemoveNoise(100);         //alphas
                 Track.ImpactPoint(Form("IP_run_%i_ev_%i_cl_%i", cam_run, cam_event,sc_i));
                 Track.ScaledTrack(Form("Rebinned_run_%i_ev_%i_cl_%i", cam_run, cam_event,sc_i));
                 Track.Direction();
@@ -291,7 +290,7 @@ int main(int argc, char**argv) {
                 const char* name = Form("ev_%i_run_%i_cluster_%i", cam_run, cam_event,sc_i);
                 TFitResultPtr fitResult; 
                 printTrackProfilesAndFit(Track.FillProfile(false,name), Track.FillProfile(true,name),Form("Profiles_%s",name), fitResult, save_everything);
-                
+
                 if (fitResult.Get()) {
                     fitAmp   = fitResult->Parameter(0), fitAmpError   = fitResult->ParError(0); 
                     fitMean  = fitResult->Parameter(1), fitMeanError  = fitResult->ParError(1); 
@@ -310,13 +309,13 @@ int main(int argc, char**argv) {
                 //----------- Verbose information  -----------//
 
                 cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
-                cout << "\nTrack information: \n" << endl; 
-                cout << "--> Estimated Z was: " << calculated_Z << " cm." << endl;
-                cout << "--> Transverse prof. fit Quality (Chi2/Ndf): "  << fitQuality << endl;
-                cout << "--> Position barycenter: " << "x: " << xbar << "; y: " << ybar << endl;
-                cout << "--> Quadrant: " << quadrant_cam << endl;
-                cout << "--> Angle: " << angle_cam << " degrees." << endl;
-                cout << "--> Length (cm): " << sc_length[sc_i] * granularity << endl;
+                cout << "\nTrack information: \n"   << endl; 
+                cout << "--> Estimated Z was: "     << calculated_Z     << " cm."       << endl;
+                cout << "--> Transverse prof. fit Quality (Chi2/Ndf): " << fitQuality   << endl;
+                cout << "--> Position barycenter: " << "x: "            << xbar << "; y: " << ybar << endl;
+                cout << "--> Quadrant: "            << quadrant_cam     << endl;
+                cout << "--> Angle: "               << angle_cam        << " degrees."  << endl;
+                cout << "--> Length (cm): "         << sc_length[sc_i] * granularity    << endl;
 
 
                 //----------- Collect all the relevant info for posterior analysis  -----------//
@@ -733,18 +732,15 @@ int main(int argc, char**argv) {
             track_end_Y = cam.end_Y_cm;
             XY_length = sqrt(pow(track_end_X - begin_X, 2) + pow(track_end_Y - begin_Y, 2));
 
-            // --- sc_length is not reliable because of the shadow. Thus I use directly  the "Edges" of the track
-            // XY_length = cam.trv_XY;                              
-            // track_end_X = begin_X + ( XY_length * cos(cam.angle_XY * TMath::Pi()/180.));        
-            // track_end_Y = begin_Y + ( XY_length * sin(cam.angle_XY * TMath::Pi()/180.));        
-            
             track_end_Z = begin_Z + ( Z_length  * pmt.dir);                                        // if dir = 0, track doesn't show Z direction       
 
             if ( pmt.dir != 0) {
+               
                 Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi() * pmt.dir;
-            } else {
-                // If the direction is not clear, I generate a random direction. Important to not bias the results .
 
+            } else {
+
+                // If the direction is not clear, I generate a random direction. Useful to not lose too much statistics (for variables that are not dependent on the direction (length))
                 random_dir = generate_random_direction();
 
                 cout << "Random direction: " << random_dir << endl;
@@ -752,8 +748,6 @@ int main(int argc, char**argv) {
                 Z_angle = atan(Z_length/XY_length) * 180. / TMath::Pi() * random_dir;
             } 
 
-            // Z_angle = atan(Z_length/(track_end_X-begin_X)) * 180. / TMath::Pi();
-            // Z_angle = atan2(Z_length,(double)(track_end_X-begin_X)) * 180. / TMath::Pi();
             XY_angle = cam.angle_XY;
 
             full_length = TMath::Sqrt(pow(XY_length,2) + pow(Z_length,2));
@@ -808,6 +802,7 @@ int main(int argc, char**argv) {
             cam_rms = cam.rms;
             cam_tgausssigma = cam.tgausssigma;
             cam_t_prof_sigma = cam.fitSig*granularity;
+            cam_t_prof_RMS = cam.profile_RMS*granularity;
             cam_calc_abs_Z = cam.calc_abs_Z;
             cam_fit_quality = cam.fit_qual;
             cam_cutted_bool = cam.cut_noisy_band;
@@ -827,6 +822,7 @@ int main(int argc, char**argv) {
 
     // After adding the function to do PMT-analysis only for CAM-found alphas, cleaning the file is no longer (very) needed.
     // Like this, one can also cross-check why no matching occurred.
+    // Uncoment below to keep only the files with alphas
     // deleteNonAlphaDirectories(final_out.c_str());
 
     auto end = chrono::high_resolution_clock::now();
