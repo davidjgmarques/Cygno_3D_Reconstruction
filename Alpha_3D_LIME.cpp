@@ -139,6 +139,7 @@ int main(int argc, char**argv) {
     double fitAmp, fitMean, fitSigma, fitConst;
     double fitAmpError, fitMeanError, fitSigmaError, fitConstError;
     double fitQuality, calculated_Z;
+    double profile_RMS;
 
     // PMT
     double fitted_lum;
@@ -301,7 +302,10 @@ int main(int argc, char**argv) {
                     fitAmp = 0, fitAmpError = 0, fitMean = 0, fitMeanError = 0, fitSigma = 0, fitSigmaError = 0, fitConst = 0, fitConstError = 0, fitQuality = 0;
                 }
                 
-                calculated_Z = estimate_absolute_Z(fitSigma*granularity);
+                profile_RMS = getHistogramRMS(Track.FillProfile(false,name)); 
+
+                // calculated_Z = estimate_absolute_Z(fitSigma*granularity);
+                calculated_Z = estimate_absolute_Z(profile_RMS*granularity);
 
                 //----------- Verbose information  -----------//
 
@@ -348,7 +352,9 @@ int main(int argc, char**argv) {
                     .calc_abs_Z = calculated_Z,
                     .fit_qual = fitQuality,
 
-                    .cut_noisy_band = cut_reco_noisy_band
+                    .cut_noisy_band = cut_reco_noisy_band,
+
+                    .profile_RMS = profile_RMS
                 });      
 
                 //----------- Cleanup ----------------- -----------//
@@ -585,6 +591,7 @@ int main(int argc, char**argv) {
     double cam_rms;
     double cam_tgausssigma;
     double cam_t_prof_sigma;
+    double cam_t_prof_RMS;
     double cam_calc_abs_Z;
     double cam_fit_quality;
     bool   cam_cutted_bool;
@@ -632,6 +639,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
     tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
     tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
+    tree_3D->Branch("cam_t_prof_RMS", &cam_t_prof_RMS, "cam_t_prof_RMS/D");
     tree_3D->Branch("cam_calc_abs_Z", &cam_calc_abs_Z, "cam_calc_abs_Z/D");
     tree_3D->Branch("cam_fit_quality", &cam_fit_quality, "cam_fit_quality/D");
     tree_3D->Branch("cam_cutted_bool", &cam_cutted_bool, "cam_cutted_bool/B");

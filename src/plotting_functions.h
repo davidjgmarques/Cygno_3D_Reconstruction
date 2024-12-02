@@ -12,6 +12,8 @@ void doubleGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &f
 
 void centralGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save);
 
+double getHistogramRMS(TH1D* histo);
+
 void addTracks( TCanvas *image, TH2F *histo, TH2F* track, int fminx, int fminy, std::string nometh2);
 
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,

@@ -40,6 +40,8 @@ struct AlphaTrackCAM {
     Cutted events should be automatically discarded */
     bool cut_noisy_band; 
 
+    double profile_RMS;
+
 };
 
 struct AlphaTrackPMT {
