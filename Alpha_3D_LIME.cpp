@@ -426,7 +426,6 @@ int main(int argc, char**argv) {
         sliceWaveform_BAT(fast_waveform, integrals_slices, matching_slices, TOT20_begin, TOT20_end, false);
 
         //-----------  Getting travelled Z  -----------//
-        //    **SHOULD CORRECT FOR MINIMUM TILTNESS OFFSET
 
         delta_z = (TOT20_end - TOT20_begin) * (4./3.) * (drift_vel/1000.);
         travelled_Z.push_back(delta_z);
@@ -531,7 +530,7 @@ int main(int argc, char**argv) {
                     .track_pmt = points_bat,
 
                     .energy = fitted_lum,
-                    .num_peaks = wf_Npeaks_ed/4, /* To fix: this should be "4." --> Check if it makes a difference */ 
+                    .num_peaks = wf_Npeaks_ed/4., //when updating, remeber in the code fort PID is actually used 4. and not just 4 
 
                     .TTT = pmt_TTT
                 });
@@ -787,7 +786,7 @@ int main(int argc, char**argv) {
                 Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_cl_%i_trg_%i", cam.cluster, pmt.trg));
                 build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,
                     XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
-                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity);
+                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity); // Remember Z = 0 is cathode, the opposite of the "typical" usage of longitudinal Z. (**for visualization**)
             }
 
             //-----------  Variables for mixed analysis  -------------------------------//

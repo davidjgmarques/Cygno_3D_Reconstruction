@@ -74,10 +74,19 @@ double estimate_absolute_Z(double sigma) {
     // From Cygno Lemon paper, Z can be estimated from:
     // Z = (sigma_measured^2 - sigma_0^2) / sigma_transverse^2
 
+    /* To be changed and cleaned... */
+
     // From Lemon paper -- Gas and GEM parameters should not change so much wrt LIME
+    // 500 V/cm
     double sigma_zero = 292.0E-4;             //um->cm. cm/sqrt(cm)  
     double sigma_transverse = 130.0E-4;       //um->cm. cm/sqrt(cm)
 
+    // s_0 = 350 um/sqrt(cm)
+    // s_t = 115 um/sqrt(cm) 
+
+    //sigma_zero --> 350
+    //sigma_tranverse --> 110
+    
     // double sigma_zero = 390.0E-4;             //um->cm. cm/sqrt(cm) //from MANGO
     
     //From David Measurement

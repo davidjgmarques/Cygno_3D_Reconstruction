@@ -489,8 +489,8 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
 
         colorIndex = TColor::GetPalette();
         TRandom3 rand;
-        // const int numGaussianPoints = 2000;  //typical
-        const int numGaussianPoints = 200;  //for the gif
+        const int numGaussianPoints = 2000;  //typical
+        // const int numGaussianPoints = 200;  //for the gif
         double gaus_sigma = sigma;
 
         for (int i = 0; i <= numSegments; ++i) {
