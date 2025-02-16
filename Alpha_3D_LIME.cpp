@@ -140,6 +140,7 @@ int main(int argc, char**argv) {
     double fitAmpError, fitMeanError, fitSigmaError, fitConstError;
     double fitQuality, calculated_Z;
     double profile_RMS;
+    double track_prof_width;
 
     // PMT
     double fitted_lum;
@@ -305,6 +306,10 @@ int main(int argc, char**argv) {
 
                 // calculated_Z = estimate_absolute_Z(fitSigma*granularity);
                 calculated_Z = estimate_absolute_Z(profile_RMS*granularity);
+
+                //track width calculated from the width of the transverse profile
+                double track_prof_width = getTrackProfileWidth(Track.FillProfile(false,name), 0.01, 3, true);
+
 
                 //----------- Verbose information  -----------//
 

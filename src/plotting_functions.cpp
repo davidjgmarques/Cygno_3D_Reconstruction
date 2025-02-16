@@ -256,6 +256,54 @@ double getHistogramRMS(TH1D* histo) {
     return histo->GetRMS();
 }
 
+/*
+Function to retrieve the length (extension) of the track profile above a given percentage of the maximum value
+Possibly this function alrady exists in the form of other variables that I didn't know about
+*/
+double getTrackProfileWidth(TH1D* histo, double percentage = 0.05, int consecutiveBins = 3, bool verb = false) {
+    if (!histo) {
+        std::cerr << "Error: Null histogram pointer provided." << std::endl;
+        return -1;
+    }
+
+    double max = histo->GetMaximum();
+    double threshold = percentage * max;
+    double width_prof = 0;
+    bool aboveThreshold = false;
+    double start = 0;
+    double end = 0;
+    int count = 0;
+
+    for (int i = 1; i <= histo->GetNbinsX(); i++) {
+        double binContent = histo->GetBinContent(i);
+        double binCenter = histo->GetBinCenter(i);
+
+        if (binContent >= threshold) {
+            count++;
+            if (count >= consecutiveBins) {
+                if (!aboveThreshold) {
+                    start = histo->GetBinCenter(i - consecutiveBins + 1); // Set start to the first of the consecutive bins
+                    aboveThreshold = true;
+                }
+                end = binCenter;
+            }
+        } else {
+            count = 0;
+            if (aboveThreshold) {
+                break;
+            }
+        }
+    }
+
+    if (aboveThreshold) {
+        width_prof = end - start;
+    }
+
+    if (verb) std::cout << "Alpha track width from profile: " << width_prof << std::endl;
+
+    return width_prof;
+}
+
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
     
     TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 800);
