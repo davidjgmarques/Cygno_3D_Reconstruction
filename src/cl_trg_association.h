@@ -11,12 +11,10 @@ struct AlphaTrackCAM {
     int cluster;
 
     double angle_XY; 
-    double trv_XY;
     int quad;
 
     double begin_X_cm;
     double begin_Y_cm;
-
     double end_X_cm;
     double end_Y_cm;
 
@@ -26,22 +24,22 @@ struct AlphaTrackCAM {
 
     double energy;
     double nhits;
+    double size;
+    double trv_XY;
     double width;
     double xmean;
     double ymean;
     double rms;
     double tgausssigma;
+    double latrms;
 
     double fitSig;
-    double calc_abs_Z;
     double fit_qual;
-
-    /* To fix: temporary variable to check efficiency of the correction
-    Cutted events should be automatically discarded */
-    bool cut_noisy_band; 
-
     double profile_RMS;
 
+    double abs_Z;
+
+    bool cut_noisy_band; /* To fix: temporary variable to check efficiency of the correction. Cutted events could be automatically discarded */ 
 };
 
 struct AlphaTrackPMT {

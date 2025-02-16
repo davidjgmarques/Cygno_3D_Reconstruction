@@ -157,13 +157,16 @@ int main(int argc, char**argv) {
     int cam_event;      tree_cam->SetBranchAddress("event", &cam_event);
 
     vector<float> sc_integral;    sc_integral.reserve(150000);    tree_cam->SetBranchAddress("sc_integral",   sc_integral.data());
-    vector<float> sc_rms;         sc_rms.reserve(150000);         tree_cam->SetBranchAddress("sc_rms",        sc_rms.data());
-    vector<float> sc_tgausssigma; sc_tgausssigma.reserve(150000); tree_cam->SetBranchAddress("sc_tgausssigma",sc_tgausssigma.data());
+    vector<float> sc_nhits;       sc_nhits.reserve(150000);       tree_cam->SetBranchAddress("sc_nhits",      sc_nhits.data());  
+    vector<float> sc_size;        sc_size.reserve(150000);        tree_cam->SetBranchAddress("sc_size",       sc_size.data());  
     vector<float> sc_length;      sc_length.reserve(150000);      tree_cam->SetBranchAddress("sc_length",     sc_length.data());
     vector<float> sc_width;       sc_width.reserve(150000);       tree_cam->SetBranchAddress("sc_width",      sc_width.data());
     vector<float> sc_xmean;       sc_xmean.reserve(150000);       tree_cam->SetBranchAddress("sc_xmean",      sc_xmean.data());  
     vector<float> sc_ymean;       sc_ymean.reserve(150000);       tree_cam->SetBranchAddress("sc_ymean",      sc_ymean.data());  
-    vector<float> sc_nhits;       sc_nhits.reserve(150000);       tree_cam->SetBranchAddress("sc_nhits",      sc_nhits.data());  
+    vector<float> sc_rms;         sc_rms.reserve(150000);         tree_cam->SetBranchAddress("sc_rms",        sc_rms.data());
+    vector<float> sc_tgausssigma; sc_tgausssigma.reserve(150000); tree_cam->SetBranchAddress("sc_tgausssigma",sc_tgausssigma.data());
+    vector<float> sc_latrms;      sc_latrms.reserve(150000);      tree_cam->SetBranchAddress("sc_latrms",     sc_latrms.data());
+
 
     UInt_t nSc;                     tree_cam->SetBranchAddress("nSc",   &nSc);
     UInt_t Nredpix=0;               tree_cam->SetBranchAddress("nRedpix",&Nredpix);
@@ -316,7 +319,7 @@ int main(int argc, char**argv) {
                 cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
                 cout << "\nTrack information: \n"   << endl; 
                 cout << "--> Estimated Z was: "     << calculated_Z     << " cm."       << endl;
-                cout << "--> Transverse prof. fit Quality (Chi2/Ndf): " << fitQuality   << endl;
+                // cout << "--> Transverse prof. fit Quality (Chi2/Ndf): " << fitQuality   << endl;
                 cout << "--> Position barycenter: " << "x: "            << xbar << "; y: " << ybar << endl;
                 cout << "--> Quadrant: "            << quadrant_cam     << endl;
                 cout << "--> Angle: "               << angle_cam        << " degrees."  << endl;
@@ -331,7 +334,6 @@ int main(int argc, char**argv) {
                     .cluster = sc_i,
 
                     .angle_XY = angle_cam,
-                    .trv_XY = sc_length[sc_i] * granularity,
 
                     .quad = quadrant_cam,
 
@@ -346,19 +348,22 @@ int main(int argc, char**argv) {
 
                     .energy      = sc_integral[sc_i],
                     .nhits       = sc_nhits[sc_i],
+                    .size        = sc_size[sc_i],
+                    .trv_XY      = sc_length[sc_i] * granularity, // equal to "sc_length"
                     .width       = sc_width[sc_i] * granularity,
                     .xmean       = sc_xmean[sc_i] * granularity,
                     .ymean       = sc_ymean[sc_i] * granularity,
                     .rms         = sc_rms[sc_i],
                     .tgausssigma = sc_tgausssigma[sc_i],
+                    .latrms      = sc_latrms[sc_i],
 
                     .fitSig = fitSigma,
-                    .calc_abs_Z = calculated_Z,
                     .fit_qual = fitQuality,
+                    .profile_RMS = profile_RMS,
 
-                    .cut_noisy_band = cut_reco_noisy_band,
+                    .abs_Z  = calculated_Z,
 
-                    .profile_RMS = profile_RMS
+                    .cut_noisy_band = cut_reco_noisy_band
                 });      
 
                 //----------- Cleanup ----------------- -----------//
@@ -588,23 +593,25 @@ int main(int argc, char**argv) {
     double pmt_peaks;
     double cam_energy;
     double cam_nhits;
+    double cam_size;
     double cam_width;
     double cam_xmean;
     double cam_ymean;
     double cam_rms;
     double cam_tgausssigma;
+    double cam_latrms;
     double cam_t_prof_sigma;
-    double cam_t_prof_RMS;
-    double cam_calc_abs_Z;
     double cam_fit_quality;
+    double cam_t_prof_RMS;
+    double absolute_Z;
     bool   cam_cutted_bool;
 
     TTree *tree_3D = new TTree("AlphaEvents", "3D Alpha Tracks");
 
     // General
-    tree_3D->Branch("run", &run, "run/I");
-    tree_3D->Branch("picture", &picture, "picture/I");
-    tree_3D->Branch("trigger", &trigger, "trigger/I");
+    tree_3D->Branch("run",      &run,       "run/I");
+    tree_3D->Branch("picture",  &picture,   "picture/I");
+    tree_3D->Branch("trigger",  &trigger,   "trigger/I");
 
     // 3D track variables
     tree_3D->Branch("begin_X", &begin_X, "begin_X/D");
@@ -613,15 +620,15 @@ int main(int argc, char**argv) {
     tree_3D->Branch("track_end_X", &track_end_X, "track_end_X/D");
     tree_3D->Branch("track_end_Y", &track_end_Y, "track_end_Y/D");
     tree_3D->Branch("track_end_Z", &track_end_Z, "track_end_Z/D");
-    tree_3D->Branch("Z_angle", &Z_angle, "Z_angle/D");
-    tree_3D->Branch("XY_angle", &XY_angle, "XY_angle/D");
-    tree_3D->Branch("Z_length", &Z_length, "Z_length/D");
-    tree_3D->Branch("XY_length", &XY_length, "XY_length/D");
-    tree_3D->Branch("full_length", &full_length, "full_length/D");
+    tree_3D->Branch("Z_angle",  &Z_angle,   "Z_angle/D");
+    tree_3D->Branch("XY_angle", &XY_angle,  "XY_angle/D");
+    tree_3D->Branch("Z_length", &Z_length,  "Z_length/D");
+    tree_3D->Branch("XY_length",    &XY_length,     "XY_length/D");
+    tree_3D->Branch("full_length",  &full_length,   "full_length/D");
 
     // Head-tail
-    tree_3D->Branch("pmt_direction", &pmt_direction, "pmt_direction/D");
-    tree_3D->Branch("pmt_direction_score", &pmt_direction_score, "pmt_direction_score/D");
+    tree_3D->Branch("pmt_direction",        &pmt_direction,         "pmt_direction/D");
+    tree_3D->Branch("pmt_direction_score",  &pmt_direction_score,   "pmt_direction_score/D");
 
     // Association
     tree_3D->Branch("cam_quad", &cam_quad, "cam_quad/I");
@@ -632,20 +639,22 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cut_ttt_sensor", &cut_ttt_sensor, "cut_ttt_sensor/B");
 
     // Remaining variables
-    tree_3D->Branch("pmt_energy", &pmt_energy, "pmt_energy/D");
-    tree_3D->Branch("pmt_peaks", &pmt_peaks, "pmt_peaks/D");
-    tree_3D->Branch("cam_energy", &cam_energy, "cam_energy/D");
-    tree_3D->Branch("cam_nhits", &cam_nhits, "cam_nhits/D");
-    tree_3D->Branch("cam_width", &cam_width, "cam_width/D");
-    tree_3D->Branch("cam_xmean", &cam_xmean, "cam_xmean/D");
-    tree_3D->Branch("cam_ymean", &cam_ymean, "cam_ymean/D");
-    tree_3D->Branch("cam_rms", &cam_rms, "cam_rms/D");
-    tree_3D->Branch("cam_tgausssigma", &cam_tgausssigma, "cam_tgausssigma/D");
-    tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma, "cam_t_prof_sigma/D");
-    tree_3D->Branch("cam_t_prof_RMS", &cam_t_prof_RMS, "cam_t_prof_RMS/D");
-    tree_3D->Branch("cam_calc_abs_Z", &cam_calc_abs_Z, "cam_calc_abs_Z/D");
-    tree_3D->Branch("cam_fit_quality", &cam_fit_quality, "cam_fit_quality/D");
-    tree_3D->Branch("cam_cutted_bool", &cam_cutted_bool, "cam_cutted_bool/B");
+    tree_3D->Branch("pmt_energy",   &pmt_energy,    "pmt_energy/D");
+    tree_3D->Branch("pmt_peaks",    &pmt_peaks,     "pmt_peaks/D");
+    tree_3D->Branch("cam_energy",   &cam_energy,    "cam_energy/D");
+    tree_3D->Branch("cam_nhits",    &cam_nhits,     "cam_nhits/D");
+    tree_3D->Branch("cam_size",     &cam_size,      "cam_size/D");
+    tree_3D->Branch("cam_width",    &cam_width,     "cam_width/D");
+    tree_3D->Branch("cam_xmean",    &cam_xmean,     "cam_xmean/D");
+    tree_3D->Branch("cam_ymean",    &cam_ymean,     "cam_ymean/D");
+    tree_3D->Branch("cam_rms",      &cam_rms,       "cam_rms/D");
+    tree_3D->Branch("cam_tgausssigma",  &cam_tgausssigma,   "cam_tgausssigma/D");
+    tree_3D->Branch("cam_latrms",       &cam_latrms,        "cam_latrms/D");
+    tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma,  "cam_t_prof_sigma/D");
+    tree_3D->Branch("cam_fit_quality",  &cam_fit_quality,   "cam_fit_quality/D");
+    tree_3D->Branch("cam_t_prof_RMS",   &cam_t_prof_RMS,    "cam_t_prof_RMS/D");
+    tree_3D->Branch("absolute_Z",       &absolute_Z,        "absolute_Z/D");
+    tree_3D->Branch("cam_cutted_bool",  &cam_cutted_bool,   "cam_cutted_bool/B");
     
     // Capture the current Git commit hash
     string git_commit_hash = exec("git rev-parse HEAD");
@@ -796,20 +805,22 @@ int main(int argc, char**argv) {
 
             //-----------  Variables for mixed analysis  -------------------------------//
 
-            pmt_energy = pmt.energy;
-            pmt_peaks = pmt.num_peaks;
-            cam_energy = cam.energy;
-            cam_nhits = cam.nhits;
-            cam_width = cam.width;
-            cam_xmean = cam.xmean;
-            cam_ymean = cam.ymean;
-            cam_rms = cam.rms;
-            cam_tgausssigma = cam.tgausssigma;
+            pmt_energy  = pmt.energy;
+            pmt_peaks   = pmt.num_peaks;
+            cam_energy  = cam.energy;
+            cam_nhits   = cam.nhits;
+            cam_size    = cam.size;
+            cam_width   = cam.width;
+            cam_xmean   = cam.xmean;
+            cam_ymean   = cam.ymean;
+            cam_rms     = cam.rms;
+            cam_tgausssigma  = cam.tgausssigma;
+            cam_latrms       = cam.latrms;
             cam_t_prof_sigma = cam.fitSig*granularity;
-            cam_t_prof_RMS = cam.profile_RMS*granularity;
-            cam_calc_abs_Z = cam.calc_abs_Z;
-            cam_fit_quality = cam.fit_qual;
-            cam_cutted_bool = cam.cut_noisy_band;
+            cam_fit_quality  = cam.fit_qual;
+            cam_t_prof_RMS   = cam.profile_RMS*granularity;
+            absolute_Z       = cam.abs_Z;
+            cam_cutted_bool  = cam.cut_noisy_band;
 
             //-----------  Tree filling and variables cleaning  ----------//
         
