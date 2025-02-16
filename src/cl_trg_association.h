@@ -37,6 +37,8 @@ struct AlphaTrackCAM {
     double fit_qual;
     double profile_RMS;
 
+    double profile_width;
+
     double abs_Z;
 
     bool cut_noisy_band; /* To fix: temporary variable to check efficiency of the correction. Cutted events could be automatically discarded */ 

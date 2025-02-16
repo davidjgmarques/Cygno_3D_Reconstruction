@@ -311,7 +311,7 @@ int main(int argc, char**argv) {
                 calculated_Z = estimate_absolute_Z(profile_RMS*granularity);
 
                 //track width calculated from the width of the transverse profile
-                double track_prof_width = getTrackProfileWidth(Track.FillProfile(false,name), 0.01, 3, true);
+                track_prof_width = getTrackProfileWidth(Track.FillProfile(false,name), 0.01, 3, true);
 
 
                 //----------- Verbose information  -----------//
@@ -360,6 +360,8 @@ int main(int argc, char**argv) {
                     .fitSig = fitSigma,
                     .fit_qual = fitQuality,
                     .profile_RMS = profile_RMS,
+
+                    .profile_width = track_prof_width,
 
                     .abs_Z  = calculated_Z,
 
@@ -603,6 +605,7 @@ int main(int argc, char**argv) {
     double cam_t_prof_sigma;
     double cam_fit_quality;
     double cam_t_prof_RMS;
+    double cam_t_prof_width;
     double absolute_Z;
     bool   cam_cutted_bool;
 
@@ -653,6 +656,7 @@ int main(int argc, char**argv) {
     tree_3D->Branch("cam_t_prof_sigma", &cam_t_prof_sigma,  "cam_t_prof_sigma/D");
     tree_3D->Branch("cam_fit_quality",  &cam_fit_quality,   "cam_fit_quality/D");
     tree_3D->Branch("cam_t_prof_RMS",   &cam_t_prof_RMS,    "cam_t_prof_RMS/D");
+    tree_3D->Branch("cam_t_prof_width", &cam_t_prof_width,  "cam_t_prof_width/D");
     tree_3D->Branch("absolute_Z",       &absolute_Z,        "absolute_Z/D");
     tree_3D->Branch("cam_cutted_bool",  &cam_cutted_bool,   "cam_cutted_bool/B");
     
@@ -819,6 +823,7 @@ int main(int argc, char**argv) {
             cam_t_prof_sigma = cam.fitSig*granularity;
             cam_fit_quality  = cam.fit_qual;
             cam_t_prof_RMS   = cam.profile_RMS*granularity;
+            cam_t_prof_width = cam.profile_width*granularity;
             absolute_Z       = cam.abs_Z;
             cam_cutted_bool  = cam.cut_noisy_band;
 
