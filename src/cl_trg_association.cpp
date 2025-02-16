@@ -71,32 +71,33 @@ void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &
 
 double estimate_absolute_Z(double sigma) {
 
-    // From Cygno Lemon paper, Z can be estimated from:
+    // Z can be estimated using the track diffusion, from:
     // Z = (sigma_measured^2 - sigma_0^2) / sigma_transverse^2
 
-    /* To be changed and cleaned... */
+    // From Lemon paper -- 500 V/cm
+    // double sigma_zero       = 292.0E-4;             //um->cm. cm/sqrt(cm)  
+    // double sigma_transverse = 130.0E-4;             //um->cm. cm/sqrt(cm)
 
-    // From Lemon paper -- Gas and GEM parameters should not change so much wrt LIME
-    // 500 V/cm
-    double sigma_zero = 292.0E-4;             //um->cm. cm/sqrt(cm)  
-    double sigma_transverse = 130.0E-4;       //um->cm. cm/sqrt(cm)
-
+    // From simulation -- Most up-to-date values
     // s_0 = 350 um/sqrt(cm)
     // s_t = 115 um/sqrt(cm) 
 
-    //sigma_zero --> 350
-    //sigma_tranverse --> 110
-    
+    // From MANGO
     // double sigma_zero = 390.0E-4;             //um->cm. cm/sqrt(cm) //from MANGO
     
-    //From David Measurement
+    // From David Measurement
     // David measured LENGTH which is not what you need in the formula (which is the real sigma)
+    // David does not recall where these numbers come from. It is not from the 55Fe size
     // double sigma_zero = 570.0E-4;             //um->cm. cm/sqrt(cm)
     // double sigma_transverse = 76.0E-4;       //um->cm. cm/sqrt(cm)
     
     // From Rita Roque's PhD thesis
     // double sigma_zero = 500.0E-4;             //um->cm. cm/sqrt(cm)  
     // double sigma_transverse = 110.0E-4;       //um->cm. cm/sqrt(cm)
+
+    // From a posteriori correction
+    double sigma_zero = 900.0E-4;             //um->cm. cm/sqrt(cm)  
+    double sigma_transverse = 115.0E-4;       //um->cm. cm/sqrt(cm)
 
     double Z = 0;
 
