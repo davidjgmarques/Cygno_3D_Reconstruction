@@ -311,7 +311,7 @@ int main(int argc, char**argv) {
                 calculated_Z = estimate_absolute_Z(profile_RMS*granularity);
 
                 //track width calculated from the width of the transverse profile
-                track_prof_width = getTrackProfileWidth(Track.FillProfile(false,name), 0.01, 3, true);
+                track_prof_width = getTrackProfileWidth(Track.FillProfile(false,name), 0.02, 3, false);
 
 
                 //----------- Verbose information  -----------//
@@ -793,9 +793,11 @@ int main(int argc, char**argv) {
             cout << "--> Travelled Z: "             << Z_length                 << endl;
             cout << "--> Direction in Z: "          << pmt_direction            << " at "   << pmt_direction_score << " score" << endl;
             cout << "--> Angle Z (#theta): "        << Z_angle                  << endl;
-            cout << "--> Transv. prof. (cm): "      << cam.fitSig*granularity   << endl;
+            cout << "--> Absolute Z: "              << cam.abs_Z                << endl;
             cout << "--> 3D alpha length (cm): "    << full_length              << endl;
             cout << "--> WF TTT: "                  << pmt.TTT                  << endl;
+            cout << "--> Transv. prof. (cm): "      << cam.profile_RMS*granularity      << endl;
+            cout << "--> Transv. prof. width (cm): "<< cam.profile_width*granularity    << endl;
             cout << endl;
             cout << "---------------------------------------------------" << endl;
 
@@ -804,7 +806,7 @@ int main(int argc, char**argv) {
                 Points_BAT_CAM(pmt.track_pmt, cam.track_cam, Form("BAT_CAM_association_cl_%i_trg_%i", cam.cluster, pmt.trg));
                 build_3D_vector(begin_X,track_end_X,begin_Y,track_end_Y,begin_Z,track_end_Z,
                     XY_length, XY_angle, Z_length, pmt.dir, pmt_direction_score, Z_angle, full_length, 
-                    pmt.run, pmt.pic, pmt.trg, false, cam.fitSig*granularity); // Remember Z = 0 is cathode, the opposite of the "typical" usage of longitudinal Z. (**for visualization**)
+                    pmt.run, pmt.pic, pmt.trg, false, cam.profile_RMS*granularity); // Remember Z = 0 is cathode, the opposite of the "typical" usage of longitudinal Z. (**for visualization**)
             }
 
             //-----------  Variables for mixed analysis  -------------------------------//
