@@ -85,19 +85,17 @@ double estimate_absolute_Z(double sigma) {
     // From MANGO
     // double sigma_zero = 390.0E-4;             //um->cm. cm/sqrt(cm) //from MANGO
     
-    // From David Measurement
-    // David measured LENGTH which is not what you need in the formula (which is the real sigma)
-    // David does not recall where these numbers come from. It is not from the 55Fe size
-    // double sigma_zero = 570.0E-4;             //um->cm. cm/sqrt(cm)
-    // double sigma_transverse = 76.0E-4;       //um->cm. cm/sqrt(cm)
-    
     // From Rita Roque's PhD thesis
     // double sigma_zero = 500.0E-4;             //um->cm. cm/sqrt(cm)  
     // double sigma_transverse = 110.0E-4;       //um->cm. cm/sqrt(cm)
 
     // From a posteriori correction
-    double sigma_zero = 900.0E-4;             //um->cm. cm/sqrt(cm)  
-    double sigma_transverse = 115.0E-4;       //um->cm. cm/sqrt(cm)
+    // double sigma_zero = 900.0E-4;             //um->cm. cm/sqrt(cm)  
+    // double sigma_transverse = 115.0E-4;       //um->cm. cm/sqrt(cm)
+
+    // Final from MANGO
+    double sigma_zero = 780.0E-4;             //um->cm. cm/sqrt(cm)  
+    double sigma_transverse = 130.0E-4;       //um->cm. cm/sqrt(cm)
 
     double Z = 0;
 
