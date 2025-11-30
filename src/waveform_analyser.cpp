@@ -1,3 +1,10 @@
+/* -----------------------------------------------------------------------------
+ - waveform_analyser.cpp
+ - - Utilities to analyse PMT waveforms: filtering, peak-finding, time-over-threshold
+ - - extraction, sliced integrals and simple QA.
+ - - sliceWaveform_BAT to ensure ROOT objects created with new are deleted.
+ - ----------------------------------------------------------------------------- */
+
 #include <vector>
 #include <memory>
 #include <stdexcept>
@@ -15,6 +22,13 @@
 
 #include "waveform_analyser.h"
 
+/* -----------------------------------------------------------------------------
+ - movingAverageFilter
+ - - Apply a centred moving-average filter to the waveform.
+ - - Preconditions: windowSize > 0. If the input vector is empty the function
+ - - returns immediately. This function replaces the content of the input
+ - - waveform with the filtered result.
+ - ----------------------------------------------------------------------------- */
 void movingAverageFilter(std::shared_ptr<std::vector<double>>& input_wf, int windowSize) {
     // Ensure the window size is valid
     if (windowSize <= 0) {
@@ -23,6 +37,9 @@ void movingAverageFilter(std::shared_ptr<std::vector<double>>& input_wf, int win
 
     // Get the size of the input_wf vector
     int n = input_wf->size();
+
+    // Nothing to do for empty input
+    if (n == 0) return;
     
     // Create a temporary vector to hold the filtered values
     std::vector<double> filtered(n);
@@ -44,6 +61,12 @@ void movingAverageFilter(std::shared_ptr<std::vector<double>>& input_wf, int win
     *input_wf = std::move(filtered);
 }
 
+/* -----------------------------------------------------------------------------
+ - getTOTs
+ - - Extract time-over-threshold (TOT) begin/end points for two thresholds
+ - - (t20_div and t30_div). The function writes back integer begin/end times
+ - - into the provided reference parameters.
+ - ----------------------------------------------------------------------------- */
 void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_div, double t30_div, 
     int &t20_b, int &t20_e, int &t30_b, int &t30_e, double max, std::vector<int> time) {
 
@@ -60,6 +83,12 @@ void getTOTs (const std::shared_ptr<std::vector<double>> &input_wf, double t20_d
     if (t30_e == 0) t30_e = 1024;           /* To fix: Flag to fix the case where the waveform is saturated in time. (Although its rare) */
 }
 
+/* -----------------------------------------------------------------------------
+ - sliceWaveform_BAT
+ - - Divide the TOT20 window into nSlices and compute the average value inside
+ - - each slice. Optionally draw a plot of the waveform with slice boundaries.
+ - - Safety: validate nSlices and TOT20 window and guard divisions by zero.
+ - ----------------------------------------------------------------------------- */
 void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf, 
     std::vector<std::vector<double>> &integrals,
     int nSlices, int TOT20_b, int TOT20_e, bool plots) {
@@ -71,7 +100,7 @@ void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf,
     integrals.push_back(std::vector<double>{});
 
     int nLines = nSlices + 1;
-    vector<int> line_p;
+    std::vector<int> line_p;
 
     for (int s = 0; s < nSlices; ++s) {
 
@@ -109,7 +138,8 @@ void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf,
         gWaveform->SetLineWidth(3);
         gWaveform->Draw();
 
-        TLine *lines[nLines];
+        // Own TLine pointers in a std::vector so we can delete them later
+        std::vector<TLine*> lines(nLines, nullptr);
         for ( Int_t line = 0; line < nLines; ++line){
 
             lines[line]= new TLine(line_p[line],gWaveform->GetYaxis()->GetXmin(),line_p[line],gWaveform->GetYaxis()->GetXmax());
@@ -127,11 +157,19 @@ void sliceWaveform_BAT (const std::shared_ptr<std::vector<double>> &input_wf,
 
         ca->DrawClone();
 
+        // Clean up objects created with new to avoid memory leaks
+        delete legend;
+        for (auto ptr : lines) if (ptr) delete ptr;
         delete gWaveform;
         delete ca;
     }
 }
 
+/* --------------------------------- getSkewness_BraggPeak --------------------------------------------
+ - - Compute skewness-related metrics looking for secondary peaks within the
+ - - TOT20 window to assign a relative skewness ratio. Appends found peaks and
+ - - skewness values to provided output containers.
+ - ----------------------------------------------------------------------------- */
 void getSkewness_BraggPeak (const std::shared_ptr<std::vector<double>> &input_wf, std::vector<int> time_fast_wf,
     int TOT20_b, int TOT20_e, double max_a, int max_t,
     std::vector<double> &skewnesses, std::vector<std::pair<int,double>> &peaks) {
@@ -177,12 +215,23 @@ void getSkewness_BraggPeak (const std::shared_ptr<std::vector<double>> &input_wf
     peaks.push_back(peak2);
 }
 
+/* -----------------------------------------------------------------------------
+ - findPeaks
+ - - Use TSpectrum to identify local maxima in the waveform. A histogram is
+ - - created temporarily for TSpectrum; TH1::AddDirectory(kFALSE) is called to
+ - - avoid placing the histogram into the global ROOT directory (prevents
+ - - histogram-replacement warnings). Detected peaks are filtered by a simple
+ - - window-based prominence metric and appended to peaks2.
+ - ----------------------------------------------------------------------------- */
 void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prominence, std::vector<std::pair<int, double>>& peaks2, bool verbose) {
     
     int n = input_wf->size();
     TSpectrum spectrum;
     double sigma = 20; // Width of the peaks
     int window_size = 50; // Window size to search for local minima
+
+    // Ensure ROOT doesn't add histograms to the current directory (avoids warnings)
+    TH1::AddDirectory(kFALSE);
 
     // Create a histogram from the input waveform
     TH1D h("h", "Waveform", n, 0, n);
@@ -221,6 +270,12 @@ void findPeaks(const std::shared_ptr<std::vector<double>>& input_wf, double prom
     }
 }
 
+/* -----------------------------------------------------------------------------
+ - getDirectionScore
+ - - Compute a combined directional score from a set of skewness ratios.
+ - - Preconditions: skew_ratio non-empty. dir_score is set to 0 on entry.
+ - - Safeguards: handles empty input and small maximum skewness.
+ - ----------------------------------------------------------------------------- */
 void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_score, bool verbose) {
 
     auto    max_skew_it     = std::max_element(skew_ratio.begin(), skew_ratio.end(), [](double a, double b) { return abs(a) < abs(b);});
@@ -236,14 +291,14 @@ void getDirectionScore( std::vector<double> skew_ratio, int &dir, double &dir_sc
 
     if (abs(max_skew) < 0.05) dir_score = 0; // If the maximum skewness is too low, all waveforms are saturated or one peaked.
 
-    if ( verbose == true) {
+    if (verbose) {
         std::cout << std::endl;
         std::cout << "--> Bragg Peak Skewness: " << std::endl;                     
         std::cout << "-> Ratios: "; for (auto &val : skew_ratio) std::cout << val << " * "; std::cout<<std::endl;
         std::cout << "-> Abs max ratio: " << abs(max_skew) << std::endl;
         std::cout << "-> Normalized: "; for (auto &val : skew_ratio) std::cout << (double)val/abs(max_skew) << " # "; std::cout<<std::endl;
         std::cout << "** Final Score: " << dir_score << " **" << std::endl;
-    }    
+    }
 
     if      (dir_score <= -0.5 )                     dir = -1;
     else if (dir_score >= +0.5 )                     dir =  1;
@@ -259,6 +314,11 @@ void getQuadrantPMT( std::vector<double>& integrals, int &quadrant_pmt) {
     quadrant_pmt = index + 1;
 }
 
+/* -----------------------------------------------------------------------------
+ - getAlphaIdentification
+ - - Simple heuristic PID using TOT20/TOT30 ratios and TOT20 lengths. Guard
+ - - divisions by zero when computing ratios.
+ - ----------------------------------------------------------------------------- */
 void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT30, const double & peaks_ed, bool &pmt_PID_total, bool verbose ) {
 
     bool pmt_PID1 = false,  pmt_PID2 = false,   pmt_PID3 = false;
@@ -269,12 +329,12 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
         // Check ratios between TOT20 and TOT30
         if ( (TOT20[q] / TOT30[q]) >= 1 && (TOT20[q] / TOT30[q]) <= 2 ) count_id1++;
 
-        // Check if the TOT20 is greater than 200 (to remove Fe-like events)       
-        if ( TOT20[q] >= 70 ) count_id2++;  //100 ->80->70
+        // Check if the TOT20 is greater than threshold (to remove Fe-like events)
+        if (TOT20[q] >= 70) count_id2++;  //100 ->80->70
     }
 
-    if ( count_id1 == 4) pmt_PID1 = true;
-    if ( count_id2 == 4) pmt_PID2 = true;
+    if (count_id1 == 4) pmt_PID1 = true;
+    if (count_id2 == 4) pmt_PID2 = true;
 
     double average_num_peaks = peaks_ed/4.;
     if ( average_num_peaks < 3) pmt_PID3 = true;
@@ -293,12 +353,25 @@ void getAlphaIdentification (std::vector<double> TOT20, std::vector<double> TOT3
         for (const auto &val : TOT20) std::cout << val << " * ";
         std::cout << std::endl;
 
-        std::cout << "--> The average number of peaks per waveform was: "; 
-        std::cout << average_num_peaks;
-        std::cout << std::endl;
+        std::cout << "--> The average number of peaks per waveform was: " << average_num_peaks << std::endl;
     }
 }
 
+/* -----------------------------------------------------------------------------
+ - checkCutOutTracks_TTT
+ - - Decide whether a track is likely cut by the TTT sensor based on timing
+ - - and Y endpoints. Returns true when the computed active sensor row lies
+ - - within (with a small tolerance) the track Y range.
+ - - Parameters:
+ - -   ttt_time : Float_t  - timing value used to compute active row
+ - -   c_begin_Y : double  - track begin Y (cm)
+ - -   c_end_Y   : double  - track end Y (cm)
+ - -   granu     : double  - granularity (cm per pixel row)
+ - -   verb      : bool    - enable verbose logging
+ - - Notes: Uses a simple linear mapping from time to sensor row and a 0.2 cm
+ - - tolerance window to mitigate pixel/geometry mismatch. This function does
+ - - not modify inputs and only performs a geometric/time-based check.
+ - ----------------------------------------------------------------------------- */
 bool checkCutOutTracks_TTT(Float_t ttt_time, double c_begin_Y, double c_end_Y, double granu, bool verb) {
 
     if(verb) std::cout << "\n... Testing for TTT sensor cut ..." << std::endl;
@@ -352,6 +425,20 @@ bool checkCutOutTracks_TTT(Float_t ttt_time, double c_begin_Y, double c_end_Y, d
     return cutted_frame;
 }
 
+/* -----------------------------------------------------------------------------
+ - checkCutOutTracks_NoisyBand
+ - - Test whether a track overlaps the known noisy Y band of the sensor.
+ - - Returns true when any part of the track lies inside the noisy region
+ - - (with a small tolerance) used to reject spurious reconstructions.
+ - - Parameters:
+ - -   c_begin_Y : double - track begin Y (cm)
+ - -   c_end_Y   : double - track end Y (cm)
+ - -   granu     : double - granularity (cm per pixel row)
+ - -   verb      : bool   - enable verbose logging
+ - - Notes: Thresholds for the noisy band are hard-coded to match the
+ - - experimental setup; adjust constants in-source if the detector layout
+ - - changes. The function performs no side effects.
+ - ----------------------------------------------------------------------------- */
 bool checkCutOutTracks_NoisyBand(double c_begin_Y, double c_end_Y, double granu, bool verb) {
 
     if(verb) std::cout << "\n... Testing for noisy band cut ..." << std::endl;

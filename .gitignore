@@ -34,10 +34,8 @@ Thumbs.db
 *test*
 
 # Ignore data files
-data/
-out/
-bat_files/
-examples/
+data/*
+out/*
 log
-*debug*.root
 gifs
+runner_alpha3d.sh

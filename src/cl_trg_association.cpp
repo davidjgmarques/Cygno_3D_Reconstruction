@@ -1,3 +1,10 @@
+/* -----------------------------------------------------------------------------
+ - cl_trg_association.cpp
+ - - Association utilities for matching camera (CAM) clusters with PMT (BAT)
+ - - reconstructions. Functions here compute distances, perform one-to-one
+ - - association ranking, provide simple geometric helpers and file-cleaning
+ - - utilities used by the main analysis pipeline. No behavior changes.
+ - ----------------------------------------------------------------------------- */
 
 #include <vector>
 #include <tuple>
@@ -11,6 +18,18 @@
 #include "cl_trg_association.h"
 #include "bat_functions.h"
 
+/* -----------------------------------------------------------------------------
+ - one_to_one_association
+ - - Compute average pointwise Euclidean distance between each CAM cluster
+ - - and each PMT/BAT track and append tuples (avg_distance, cam_index, pmt_index)
+ - - to the provided 'dists' vector. The output vector is sorted ascending by
+ - - distance so the smallest-distance associations are first.
+ - - Parameters:
+ - -   dists: output vector of tuples (distance, cam_idx, pmt_idx)
+ - -   pmt_entries: list of PMT/BAT reconstructed alpha tracks
+ - -   cam_entries: list of camera reconstructed alpha tracks
+ - -   verbose: enable per-point debug printing passed to calculate_distance
+ - ----------------------------------------------------------------------------- */
 void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dists, const std::vector<AlphaTrackPMT>& pmt_entries, const std::vector<AlphaTrackCAM>& cam_entries, bool verbose) {
 
     std::vector<std::pair<double,double>> dists_CAM_BAT;
@@ -42,6 +61,12 @@ void one_to_one_association(std::vector<std::tuple<double, size_t, size_t>> &dis
     std::sort(dists.begin(), dists.end());
 }
 
+/* -----------------------------------------------------------------------------
+ - found_clusters_in_evt
+ - - Check if any CAM alpha entries correspond to the given run/picture
+ - - (used to decide whether to run PMT analysis for that event).
+ - - Returns true if at least one CAM alpha has matching run and picture.
+ - ----------------------------------------------------------------------------- */
 bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt_run, int pmt_event) {
 
     bool found = false;
@@ -56,12 +81,14 @@ bool found_clusters_in_evt(const std::vector<AlphaTrackCAM>& CAM_alphas, int pmt
     return found;    
 }
 
+/* -----------------------------------------------------------------------------
+ - angle_3D_reverse
+ - - Reverse the order of track points when the camera angle indicates the
+ - - vector should be flipped for plotting. This does not change analysis
+ - - associations (which rely on X-ordered points) and is purely cosmetic.
+ - ----------------------------------------------------------------------------- */
 void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &points_cam)
 {
-    // Check the angle and reverse the vector if necessary
-    // Only relevant for plotting purposes, since the angle is saved directly in the structure
-    // Irrelevant for BAT-CAM distance matching, because there  I actually order the points by X.
-    // Added later due to the change in the way the track end point is calculated.
 
     if (angle_cam > 90.0 || angle_cam < -90.0)
     {
@@ -69,6 +96,12 @@ void angle_3D_reverse(double angle_cam, std::vector<std::pair<double, double>> &
     }
 }
 
+/* -----------------------------------------------------------------------------
+ - estimate_absolute_Z
+ - - Estimate absolute Z position from the measured transverse sigma using
+ - - a diffusion model: Z = (sigma^2 - sigma0^2) / sigma_transverse^2.
+ - - Returns -1 on invalid sigma or when the estimate is unphysical.
+ - ----------------------------------------------------------------------------- */
 double estimate_absolute_Z(double sigma) {
 
     // Z can be estimated using the track diffusion, from:
@@ -107,6 +140,13 @@ double estimate_absolute_Z(double sigma) {
     return Z;    
 }
 
+/* -----------------------------------------------------------------------------
+ - deleteNonAlphaDirectories
+ - - Open the output ROOT file and remove directories that do not contain
+ - - a 3D_vector object (used to prune non-alpha output folders). If
+ - - deleteAll is true, all directories are removed.
+ - - Note: operates in-place on the provided ROOT file name.
+ - ----------------------------------------------------------------------------- */
 void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
 
     std::cout << "Deleting non-alpha events from root file..." << std::endl;
@@ -157,6 +197,12 @@ void deleteNonAlphaDirectories(const char* filename, bool deleteAll) {
     }
 }
 
+/* -----------------------------------------------------------------------------
+ - generate_random_direction
+ - - Return either -1 or +1 with equal probability. Used when head-tail
+ - - determination is ambiguous and a random choice is preferable to losing
+ - - statistics for direction-insensitive quantities.
+ - ----------------------------------------------------------------------------- */
 int generate_random_direction() {
 
     std::random_device rd;  // Seed

@@ -32,10 +32,16 @@ int main(int argc, char**argv) {
     /* ****************************************  Running options   **************************************************************************  */
 
     bool save_everything = false;    //opposite of saving *only* the alpha-tree
-    bool real_pic_plot = false;
+    bool real_pic_plot = true;
 
     /* ****************************************  Inputs and outputs   **************************************************************************  */
 
+    // argv mapping:
+    //   argv[1] = mode ("full" or "debug")
+    //   argv[2] = camera reconstruction file (historically also used as PMT filename by default)
+    //   argv[3] = output basename
+    //   if mode=="debug", argv[4] may contain a debug event index
+    
     string mode = argv[ 1 ]; // debug or full
     bool batch_mode;
     if (mode == "full") batch_mode = true;
@@ -48,6 +54,8 @@ int main(int argc, char**argv) {
     }
 
     std::cout << std::boolalpha; // Enable boolalpha
+    // Prevent ROOT from adding TH1/TH2 objects to the current directory automatically, avoiding warnings about replacing existing histograms and reducing ownership-related errors.
+    TH1::AddDirectory(kFALSE);
     TApplication *myapp=new TApplication("myapp",0,0); cout << "\n" << endl;
     
     string filename_cam = argv[ 2 ];
@@ -149,13 +157,15 @@ int main(int argc, char**argv) {
 
     TFile *reco_data_cam = TFile::Open(filename_cam.c_str());
     vector <string> name_trim1 = trim_name(filename_cam, '/');
-    cout << "CAM Reco data file openend: " << name_trim1.back() << endl;
+    cout << "CAM Reco data file opened: " << name_trim1.back() << endl;
 
     TTree *tree_cam = (TTree*)reco_data_cam->Get("Events");
 
     int cam_run;        tree_cam->SetBranchAddress("run",   &cam_run);
     int cam_event;      tree_cam->SetBranchAddress("event", &cam_event);
 
+    // Note: branches storing std::vector are read into pre-reserved vectors below.
+    // Keep reserve sizes large enough to avoid reallocation during ROOT deserialization.
     vector<float> sc_integral;    sc_integral.reserve(150000);    tree_cam->SetBranchAddress("sc_integral",   sc_integral.data());
     vector<float> sc_nhits;       sc_nhits.reserve(150000);       tree_cam->SetBranchAddress("sc_nhits",      sc_nhits.data());  
     vector<float> sc_size;        sc_size.reserve(150000);        tree_cam->SetBranchAddress("sc_size",       sc_size.data());  
@@ -184,7 +194,7 @@ int main(int argc, char**argv) {
 
     TFile *reco_data_pmt = TFile::Open(filename_pmt.c_str());
     vector <string> name_trim2 = trim_name(filename_pmt, '/');
-    cout << "PMT Reco data file openend: " << name_trim2.back() << "\n" << endl;
+    cout << "PMT Reco data file opened: " << name_trim2.back() << "\n" << endl;
 
     TTree *tree_pmt = (TTree*)reco_data_pmt->Get("PMT_Events");
 
@@ -195,7 +205,7 @@ int main(int argc, char**argv) {
     int pmt_sampling;   tree_pmt->SetBranchAddress("pmt_wf_sampling",   &pmt_sampling);
     Float_t pmt_TTT;    tree_pmt->SetBranchAddress("pmt_wf_TTT",        &pmt_TTT);
 
-    // Use this method to properly read the array since it's not a real vector and then otherwise reads wronmgly the addresses
+    // Use this method to properly read the array since it's not a real vector and then otherwise reads wrongly the addresses
     // The max length is 4000 (for slow). For reading the fast, I read just the first 1024 samples (the rest is "past memory")
     const int maxArraySize_fast = 1024;                 
     const int maxArraySize_slow = 4000;                  
@@ -276,7 +286,7 @@ int main(int argc, char**argv) {
                 // x_impact = Track.GetXIP() * granularity;
                 // y_impact = Track.GetYIP() * granularity;
 
-                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1; /* To fix: Now, maybe we could use points_cam.middle(), but quadrant are not very relevant */ 
+                if      ( xbar < 2305./2. && ybar > 2305./2.) quadrant_cam = 1; /* TODO: Now, maybe we could use points_cam.middle(), but quadrants are not used anymore */ 
                 else if ( xbar > 2305./2. && ybar > 2305./2.) quadrant_cam = 2;
                 else if ( xbar > 2305./2. && ybar < 2305./2.) quadrant_cam = 3;
                 else if ( xbar < 2305./2. && ybar < 2305./2.) quadrant_cam = 4; 
@@ -316,7 +326,7 @@ int main(int argc, char**argv) {
 
                 //----------- Verbose information  -----------//
 
-                cout << "--> The particle in this cluster was identified as an alpha: " << cam_PID << endl;
+                cout << "\n--> *The particle in this cluster was identified as an alpha: " << cam_PID << endl;
                 cout << "\nTrack information: \n"   << endl; 
                 cout << "--> Estimated Z was: "     << calculated_Z     << " cm."       << endl;
                 // cout << "--> Transverse prof. fit Quality (Chi2/Ndf): " << fitQuality   << endl;
@@ -443,7 +453,7 @@ int main(int argc, char**argv) {
         travelled_Z.push_back(delta_z);
 
 
-        //-----------  Determination of track quadrant from the PMT   -------------------------------------------------------//
+        //----------- Determination of track quadrant from the PMT   -------------------------------------------------------//
 
         wf_integral = accumulate(fast_waveform->begin(), fast_waveform->end(), 0);
         integrals_wfs.push_back(wf_integral);
@@ -519,7 +529,7 @@ int main(int argc, char**argv) {
                 //----------- Run BAT routine ----------------------------//
 
                 fitted_lum = 0;
-                /* To fix: File naming a bit hardcoded here */
+                /* TODO: File naming hardcoded here -- better use relative paths or configuration */
                 create_bat_input( pmt_run, pmt_event, pmt_trigger, integrals_slices, "bat_files/input_for_bat.txt");
                 run_bat("bat_files/input_for_bat.txt", "bat_files/output_from_bat.txt", "../BAT_PMTs/./runfit.out");
                 read_bat("bat_files/output_from_bat.txt",points_bat, fitted_lum, false);
@@ -542,7 +552,7 @@ int main(int argc, char**argv) {
                     .track_pmt = points_bat,
 
                     .energy = fitted_lum,
-                    .num_peaks = wf_Npeaks_ed/4., //when updating, remeber in the code fort PID is actually used 4. and not just 4 
+                    .num_peaks = wf_Npeaks_ed/4., 
 
                     .TTT = pmt_TTT
                 });
@@ -741,7 +751,7 @@ int main(int argc, char**argv) {
 
             begin_X = cam.begin_X_cm;
             begin_Y = cam.begin_Y_cm;               
-            begin_Z = 25.0;                          // Absolute Z fixed.
+            begin_Z = 25.0;                          // TODO: Absolute Z fixed for plotting. Could be changed with calculated Z.
 
             Z_length = pmt.trv_Z;
 
@@ -843,8 +853,8 @@ int main(int argc, char**argv) {
     file_root->Close();
 
     // After adding the function to do PMT-analysis only for CAM-found alphas, cleaning the file is no longer (very) needed.
-    // Like this, one can also cross-check why no matching occurred.
-    // Uncoment below to keep only the files with alphas
+    // Like this, one can also cross-check *why* no matching occurred.
+    // Uncomment below to keep only the files with alphas
     // deleteNonAlphaDirectories(final_out.c_str());
 
     auto end = chrono::high_resolution_clock::now();
@@ -860,6 +870,26 @@ int main(int argc, char**argv) {
 
 /*  *****************************************************************************************************************************************************************************************************************  */
 
+/* ---------------------------------------------------------------------
+ - checkCuts
+ - - Quick selection helper for camera superclusters. Tests a small set
+ - - of predefined cut types (e.g. "alpha", "cosmics_thesis_1",
+ - - "cosmics_thesis_2") and returns true when the cluster passes the
+ - - requested selection. This is intentionally simple and used as a
+ - - pre-filter before heavier analysis steps.
+ -
+ - Parameters:
+ -   sc_integral : total cluster signal (float/double)
+ -   sc_nhits    : number of pixels in the cluster
+ -   sc_length   : cluster length (pixels)
+ -   sc_width    : cluster width (pixels)
+ -   cutType     : selection name (string) — currently supports
+ -                 "alpha", "cosmics_thesis_1", "cosmics_thesis_2".
+ -
+ - Returns: true if the cluster matches the requested cuts, false
+ - otherwise. The function intentionally does not throw and is
+ - side-effect-free.
+ --------------------------------------------------------------------- */
 bool checkCuts(double sc_integral, double sc_nhits, double sc_length, double sc_width, const std::string& cutType) {
     
     if (cutType == "alpha") {   //From Giorgio
@@ -879,22 +909,25 @@ bool checkCuts(double sc_integral, double sc_nhits, double sc_length, double sc_
         }
     } 
     
-    // else if (cutType == "geometrical") {
-    //     // ( ( (sc_xmean[nc]-1152)*(sc_xmean[nc]-1152) + (sc_ymean[nc]-1152)*(sc_ymean[nc]-1152) ) <(800*800)) ) {
-    // }
-    // else if (cutType == "old_cam_cut") {
-    //     // ( (sc_rms[nc] > 6) && (0.152 * sc_tgausssigma[nc] > 0.3) && (0.152 * sc_length[nc] < 80) && (sc_integral[nc] > 1000) && (sc_width[nc] / sc_length[nc] > 0.8) {
-    // }
-
     return false;
 }
 
+/* ---------------------------------------------------------------------
+ - ScIndicesElem
+ - - Build begin/end indices for reduced-pixel arrays belonging to
+ - - superclusters. The CAM reconstruction stores a flattened list of
+ - - reduced pixels; this helper computes the start/end indices for
+ - - each supercluster so callers can iterate cluster-by-cluster.
+ -
+ - Parameters:
+ -   nSc         : number of superclusters
+ -   npix        : total number of reduced pixels
+ -   sc_redpixID : array where each element contains the global index
+ -                 of the first reduced pixel of a cluster
+ -   nSc_red     : output number of detected clusters (by reference)
+ -   B, E        : output vectors filled with begin/end indices
+ --------------------------------------------------------------------- */
 void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vector<int>& B, vector<int>& E){
-    // Function to calculate indices for clusters based on reduced pixels
-    // nSc: n_superclusters; npix: total n_pixels
-    // sc_redpixID: array of indices for the first reduced pixel in each cluster
-    // nSc_red: number of processed superclusters (output)
-    // B: begin indices for reduced pixels (output);  E: end indices for reduced pixels (output)
 
     nSc_red=0;
     B.clear();
@@ -925,6 +958,19 @@ void ScIndicesElem(int nSc, UInt_t npix, float* sc_redpixID, int &nSc_red, vecto
     sc_redpix_start.clear(); // Clear the temporary storage
 }
 
+/* ---------------------------------------------------------------------
+ - exec
+ - - Small wrapper to execute a shell command and capture its stdout
+ - - output. Returns the combined stdout as a std::string. Throws on
+ - - failure to open the pipe. Used to record the current git commit
+ - - hash (via `git rev-parse HEAD`) when writing the output file.
+ -
+ - Parameters:
+ -   cmd : C-string shell command to execute
+ -
+ - Returns: stdout content as std::string. Throws runtime_error if
+ - popen fails.
+ --------------------------------------------------------------------- */
 std::string exec(const char* cmd) {
     std::array<char, 128> buffer;
     std::string result;

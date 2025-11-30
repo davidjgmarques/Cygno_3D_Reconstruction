@@ -16,6 +16,20 @@
 
 #include "plotting_functions.h"
 
+/* -----------------------------------------------------------------------------
+ - plotting_functions.cpp
+ - - Collection of plotting helpers used by the reconstruction and analysis
+ - - (waveform plotting, profile fitting, 2D/3D visualization helpers).
+ - - The edits here add descriptive multi-line block comments for readability
+ - - while preserving all original behavior and function signatures.
+ - ----------------------------------------------------------------------------- */
+
+/* --------------------- create_and_print_wf_graph_lines3 ---------------------
+ - - Create a TGraph from a waveform vector, mark ToT lines and peak markers,
+ - - and delegate to print_graph_lines3 for final drawing and saving.
+ - - Parameters: filename (used as canvas/name), time (x-axis), ampl (waveform),
+ - - start/end/level for two ToT thresholds, and two lists of peak markers.
+ - ----------------------------------------------------------------------------- */
 void create_and_print_wf_graph_lines3 (std::string filename, std::vector<int> time, std::shared_ptr<std::vector<double>> ampl, double start1, double end1, double level1, double start2, double end2, double level2, 
     std::vector<std::pair<int,double>> peaks_crown,  std::vector<std::pair<int,double>> peaks_energy_dep) {
 
@@ -44,6 +58,11 @@ void create_and_print_wf_graph_lines3 (std::string filename, std::vector<int> ti
     print_graph_lines3(gWaveform, newname, "Sample [#]", "ADC counts [#]", 0, 4000, line1, line2, markers_crown, markers_energy_dep);
 }
 
+/* ------------------------- print_graph_lines3 --------------------------------
+ - - Draws a TGraph with provided styling, overlays two horizontal TLine
+ - - thresholds and optional markers. The canvas is written to the current
+ - - ROOT file using the provided title as the key.
+ - ----------------------------------------------------------------------------- */
 void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, std::string y_axis, double yMin, double yMax, TLine *l1, TLine *l2, std::vector<TMarker*> markers_cr, std::vector<TMarker*> markers_ed){
 
     TCanvas *c = new TCanvas("","", 800, 600);
@@ -89,6 +108,11 @@ void print_graph_lines3 (TGraph *graph, std::string title, std::string x_axis, s
     c->Write(title.c_str());
 }
 
+/* ------------------------- printTrackProfilesAndFit --------------------------------
+ - - Fit a transverse profile with a single Gaussian + baseline, draw both
+ - - transverse and longitudinal profiles on a two-panel canvas and optionally
+ - - save the canvas. Returns the TFitResult via reference.
+ - ----------------------------------------------------------------------------- */
 void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
 
     TF1* func = new TF1("fitFunc", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]", h1->GetXaxis()->GetXmin(), h1->GetXaxis()->GetXmax());
@@ -136,118 +160,11 @@ void printTrackProfilesAndFit ( TH1D *h1, TH1D *h2, std::string title, TFitResul
     delete c_profiles;
 }
 
-/*
-void doubleGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
-
-    // int binmax = TransProfile_b->GetMaximumBin();
-    // --> float center_b = TransProfile_b->GetXaxis()->GetBinCenter(binmax);
-    // --> float std_b = TransProfile_b->GetRMS();
-    // --> TF1* TransProfGauss_b = new TF1("TransProfGauss_b","gaus(0) + gaus(3)",0,TransProfile_b->GetNbinsX()-1);
-    // --> TransProfGauss_b->SetParameters(1000, center_b,std_b, 100, 0, 10);
-    // --> TransProfGauss_b->SetParameters(1000, center_b,std_b, 50, 0, 10);
-    // --> TransProfGauss_b->SetParLimits(1,center_b-0.5,center_b+0.5);
-    // --> TransProfile_b->Fit("TransProfGauss_b","QR","",center_b-3*std_b, center_b+3*std_b);}
-
-    // TF1* dbGau = new TF1("dbGau", "[0]+ gaus(1)+gaus(4)", 0, h1->GetNbinsX()-1);
-    TF1* dbGau = new TF1("dbGau", "[0]*exp(-0.5*((x-[1])/[2])^2) + [3]*exp(-0.5*((x-[4])/[5])^2) + [6]", 0, h1->GetNbinsX()-1);
-    dbGau->SetParameters(1000, h1->GetMean(),h1->GetRMS(),
-                        100, 0, 10, 0);
-    dbGau->SetParLimits(1,h1->GetMean()-0.5,h1->GetMean()+0.5);
-    dbGau->SetParName(0, "Amplitude 1");
-    dbGau->SetParName(1, "Mean 1");
-    dbGau->SetParName(2, "Sigma 1");
-    dbGau->SetParName(3, "Amplitude 2");
-    dbGau->SetParName(4, "Mean 2");
-    dbGau->SetParName(5, "Sigma 2");
-    dbGau->SetParName(6, "Baseline");
-
-    // dbGau = h1->Fit(dbGau, "RNSE");
-    h1->Fit(dbGau, "RNSE");
-
-    TCanvas* c_dbGau = new TCanvas("c_dbGau","c_dbGau",1000,800); 
-    c_dbGau->cd();
-
-    h1->SetTitle("Transversal double Gaus Profile");
-    h1->Draw();
-    dbGau->Draw("same");
-
-    TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
-    pt->SetFillColor(0);
-    pt->SetTextAlign(12); // Align text to the left
-    pt->SetBorderSize(1); // Set border size to 1
-    pt->SetShadowColor(0); // Remove shadow
-    pt->SetTextFont(42); // Use a plain font
-    
-    pt->AddText(Form("Entries             = %.0f", h1->GetEntries()));
-    pt->AddText(Form("#chi^{2} / ndf      = %.2f / %d",      dbGau->GetChisquare(),  dbGau->GetNDF()));
-    pt->AddText(Form("C1                  = %.2f +/- %.2f",  dbGau->GetParameter(0), dbGau->GetParError(0)));
-    pt->AddText(Form("#mu 1               = %.2f +/- %.2f",  dbGau->GetParameter(1), dbGau->GetParError(1)));
-    pt->AddText(Form("#sigma 1            = %.2f +/- %.2f",  dbGau->GetParameter(2), dbGau->GetParError(2)));
-    pt->AddText(Form("C2                  = %.2f +/- %.2f",  dbGau->GetParameter(3), dbGau->GetParError(3)));
-    pt->AddText(Form("#mu 2               = %.2f +/- %.2f",  dbGau->GetParameter(4), dbGau->GetParError(4)));
-    pt->AddText(Form("#sigma 2            = %.2f +/- %.2f",  dbGau->GetParameter(5), dbGau->GetParError(5)));
-    pt->AddText(Form("Baseline            = %.2f +/- %.2f",  dbGau->GetParameter(6), dbGau->GetParError(6)));
-    pt->SetOptStat(1110);
-    pt->SetOptFit(1110);
-    pt->Draw();
-
-    c_dbGau->DrawClone();
-    if (save) c_dbGau->Write(Form("Track_doubleGaus_%s", title.c_str()));
-    delete c_dbGau;
-}
-*/
-
-/* 
-void centralGaussianTest( TH1D *h1, TH1D *h2, std::string title, TFitResultPtr &fitResult, bool save) {
-
-    int binmax = h1->GetMaximumBin();
-    float center_b = h1->GetXaxis()->GetBinCenter(binmax);
-    float std_b = h1->GetRMS();
-
-    // Ensure the fit is performed within the specified range
-    double fitRangeMin = center_b - 0.5 * std_b;
-    double fitRangeMax = center_b + 0.5 * std_b;
-    std::cout << "Fit range: [" << fitRangeMin << ", " << fitRangeMax << "]" << std::endl;
-    
-    // TF1* centralGau = new TF1("centralGau", "[0]*exp(-0.5*((x-[1])/[2])^2)", 0, h1->GetNbinsX()-1);
-    TF1* centralGau = new TF1("centralGau", "[0]*exp(-0.5*((x-[1])/[2])^2)");
-    centralGau->SetParameters(1000, h1->GetMean(),h1->GetRMS());
-    // dbGau->SetParLimits(1,h1->GetMean()-0.5,h1->GetMean()+0.5);
-    centralGau->SetParName(0, "Amplitude 1");
-    centralGau->SetParName(1, "Mean 1");
-    centralGau->SetParName(2, "Sigma 1");
-
-    fitResult = h1->Fit(centralGau, "RS", "", fitRangeMin, fitRangeMax);
-
-    TCanvas* c_centralGau = new TCanvas("c_centralGau","c_centralGau",1000,800); 
-    c_centralGau->cd();
-
-    h1->SetTitle("Transversal double Gaus Profile");
-    h1->Draw();
-    centralGau->Draw("same");
-
-    TPaveStats *pt = new TPaveStats(0.67, 0.67, 0.97, 0.97, "brNDC");
-    pt->SetFillColor(0);
-    pt->SetTextAlign(12); // Align text to the left
-    pt->SetBorderSize(1); // Set border size to 1
-    pt->SetShadowColor(0); // Remove shadow
-    pt->SetTextFont(42); // Use a plain font
-    
-    pt->AddText(Form("Entries             = %.0f", h1->GetEntries()));
-    pt->AddText(Form("#chi^{2} / ndf      = %.2f / %d",      centralGau->GetChisquare(),  centralGau->GetNDF()));
-    pt->AddText(Form("C1                  = %.2f +/- %.2f",  centralGau->GetParameter(0), centralGau->GetParError(0)));
-    pt->AddText(Form("#mu 1               = %.2f +/- %.2f",  centralGau->GetParameter(1), centralGau->GetParError(1)));
-    pt->AddText(Form("#sigma 1            = %.2f +/- %.2f",  centralGau->GetParameter(2), centralGau->GetParError(2)));
-    pt->SetOptStat(1110);
-    pt->SetOptFit(1110);
-    pt->Draw();
-
-    c_centralGau->DrawClone();
-    if (save) c_centralGau->Write(Form("Track_centralGaus_%s", title.c_str()));
-    delete c_centralGau;
-} 
-*/
-
+/* ---------------------------------------------------------------------------
+ - getHistogramRMS
+ - - Safe accessor for histogram RMS; returns -1 and prints an error if passed
+ - - a null pointer.
+ - ----------------------------------------------------------------------------- */
 double getHistogramRMS(TH1D* histo) {
     if (!histo) {
         std::cerr << "Error: Null histogram pointer provided." << std::endl;
@@ -256,10 +173,12 @@ double getHistogramRMS(TH1D* histo) {
     return histo->GetRMS();
 }
 
-/*
-Function to retrieve the length (extension) of the track profile above a given percentage of the maximum value
-Possibly this function alrady exists in the form of other variables that I didn't know about
-*/
+/* ---------------------------------------------------------------------------
+ - getTrackProfileWidth
+ - - Estimate the track width from a histogram by finding the contiguous set
+ - - of bins above a given percentage of the maximum. Parameters control the
+ - - percentage threshold and the minimum number of consecutive bins required.
+ - ----------------------------------------------------------------------------- */
 double getTrackProfileWidth(TH1D* histo, double percentage = 0.05, int consecutiveBins = 3, bool verb = false) {
     if (!histo) {
         std::cerr << "Error: Null histogram pointer provided." << std::endl;
@@ -304,6 +223,12 @@ double getTrackProfileWidth(TH1D* histo, double percentage = 0.05, int consecuti
     return width_prof;
 }
 
+/* -----------------------------------------------------------------------------
+ - Points_BAT_CAM
+ - - Plot and save comparison markers between BAT (PMT) fitted points and CAM
+ - - (camera) track points. A dummy 2D histogram sets the axes, and markers are
+ - - added with a legend; canvas is then written to the file.
+ - ----------------------------------------------------------------------------- */
 void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector<std::pair<double,double>> camPoints, std::string title) {
     
     TCanvas *cpoints = new TCanvas("cpoints","cpoints", 800, 800);
@@ -352,6 +277,12 @@ void Points_BAT_CAM(std::vector<std::pair<double,double>> batPoints, std::vector
 
 }
 
+/* -----------------------------------------------------------------------------
+ - addTracks
+ - - Paints a smaller track histogram into a larger camera image histogram at
+ - - specified offsets (fminx, fminy). The modified image is drawn onto the
+ - - provided canvas and cloned for saving.
+ - ----------------------------------------------------------------------------- */
 void addTracks(TCanvas *image, TH2F* histo, TH2F* track, int fminx, int fminy, std::string nometh2) {
 
     int nBinsX = track->GetNbinsX();
@@ -383,7 +314,13 @@ void addTracks(TCanvas *image, TH2F* histo, TH2F* track, int fminx, int fminy, s
     // return histo;
 }
 
-
+/* -----------------------------------------------------------------------------
+ - build_3D_vector
+ - - Build and draw a 3D representation of a reconstructed alpha track using
+ - - a TH3F axis and TPolyLine3D/TPolyMarker3D primitives for visualization.
+ - - Parameters represent the start/end coordinates and angles/lengths; the
+ - - produced canvas is written to the output file (used for diagnostics).
+ - ----------------------------------------------------------------------------- */
 void build_3D_vector (double x0, double x1, double y0, double y1, double z0, double z1,
  double l_xy, double a_xy, double l_z, int d_z, double p_z, double a_z, double length,
  int ru, int pi, int tr, bool cloud, double sigma){
@@ -501,37 +438,6 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     arrowLine4->Draw("same");
 
     //--------  Electron cloud   ---------------------------------------//
-    /*
-
-    // Generate Gaussian points around the main line
-    const int numGaussianPoints = 10000;
-    double gaus_sigma = sigma;  // Standard deviation for the Gaussian distribution
-
-    TRandom3 rand;
-    int nbins = 100;
-    TH3F *densityHist = new TH3F(Form("electroncloud_run_%i_pic_%i_trig_%i", ru, pi, tr),Form("electroncloud_run_%i_pic_%i_trig_%i", ru, pi, tr), nbins, 0, 36, nbins, 0, 50, nbins, 0, 36);
-
-    for (int i = 0; i <= numSegments; ++i) {
-        for (int j = 0; j < numGaussianPoints / numSegments; ++j) {
-            double dx = rand.Gaus(0, gaus_sigma);
-            double dy = rand.Gaus(0, gaus_sigma);
-            double dz = rand.Gaus(0, gaus_sigma);
-
-            double px = x[i] + dx;
-            double pz = y[i] + dy;
-            double py = z[i] + dz;
-
-            densityHist->Fill(px, py, pz);  // Fill the histogram with the point
-        }
-    }
-
-    densityHist->GetXaxis()->SetTitle("X");
-    densityHist->GetYaxis()->SetTitle("Z");
-    densityHist->GetZaxis()->SetTitle("Y");
-    densityHist->Draw("SAME BOX2Z");  // Draw the histogram with color representation
-    */
-
-    //--------  Electron cloud   ---------------------------------------//
 
     if (cloud) {
 
@@ -566,7 +472,6 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     TLegend* l = new TLegend(0.60, 0.6, 0.95, 0.9);
     l->SetHeader("3D Alpha information", "L");
     l->SetTextAlign(12); // Align text left-top (vertical center)
-    // l->SetMargin(0.05);  // Reduce margin to minimum
     l->AddEntry((TObject*)0,Form("Travelled XY = %.2f cm",              l_xy), "p");
     l->AddEntry((TObject*)0,Form("Angle XY (#phi) = %.2f #circ",        a_xy), "p");
     l->AddEntry((TObject*)0,Form("Travelled Z = %.2f cm",               l_z), "p");
@@ -577,4 +482,4 @@ void build_3D_vector (double x0, double x1, double y0, double y1, double z0, dou
     c_3D->DrawClone();
     c_3D->Write();
     delete c_3D;
-} 
+}
