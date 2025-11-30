@@ -53,6 +53,7 @@ External repos/tools required:
   - A more updated version of this code exists, but has not been implemented yet.
   - The BAT toolkit must be installed (https://bat.mpp.mpg.de/)
 - The CAM-reconstruction tools `CAM::Analyzer` (https://github.com/davidjgmarques/Track_analyzer)
+  - A more updated version might exist in the main repo. Feel free to check for upgrades and improvements.
 
 These are two separate projects not maintained by me and must be available at compilation to run the 3D analysis. 
 
