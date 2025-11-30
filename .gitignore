@@ -34,7 +34,7 @@ Thumbs.db
 *test*
 
 # Ignore data files
-data/*
+data2/*
 out/*
 log
 gifs_thesis
